@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { turfs, slots } from "@/lib/mock-data";
 import { ChevronLeft, ChevronRight, Lock, Wrench, Trophy, CheckCircle2 } from "lucide-react";
+import { Fragment } from "react";
 
 export const Route = createFileRoute("/calendar")({ component: CalendarPage });
 
@@ -39,8 +40,8 @@ function CalendarPage() {
             <div className="text-xs font-semibold text-muted-foreground p-2">Turf / Time</div>
             {HOURS.map(h => <div key={h} className="text-xs text-muted-foreground p-2 text-center border-l">{h}</div>)}
             {turfsList.map((t, ti) => (
-              <>
-                <div key={t.id} className="p-2 border-t font-medium text-sm">{t.name}<div className="text-[10px] text-muted-foreground">{t.sport}</div></div>
+              <Fragment key={t.id}>
+                <div className="p-2 border-t font-medium text-sm">{t.name}<div className="text-[10px] text-muted-foreground">{t.sport}</div></div>
                 {HOURS.map((h, hi) => {
                   const r = rng(ti*31 + hi);
                   const state = r<0.45?"Booked":r<0.55?"Blocked":r<0.62?"Maintenance":r<0.68?"Tournament":"Available";
@@ -52,7 +53,7 @@ function CalendarPage() {
                     </div>
                   );
                 })}
-              </>
+              </Fragment>
             ))}
           </div>
         </div>
