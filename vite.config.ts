@@ -16,5 +16,8 @@ export default defineConfig({
     server: {
       allowedHosts: ["turf-command-center.onrender.com"],
     },
+    define: {
+      "process.env": {},
+    },
   },
 });
