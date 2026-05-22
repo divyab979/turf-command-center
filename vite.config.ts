@@ -14,7 +14,10 @@ export default defineConfig({
   },
   vite: {
     server: {
-      allowedHosts: ["turf-command-center.onrender.com"],
+      allowedHosts: [
+        "turf-command-center.onrender.com",
+        "gameup11.onrender.com",
+      ],
     },
     define: {
       "process.env": {},
