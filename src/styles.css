@@ -1,6 +1,6 @@
-@import "tailwindcss" source(none);
-@source "../src";
+@import "tailwindcss";
 @import "tw-animate-css";
+@source "../src";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -62,45 +62,40 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.985 0.005 150);
-  --foreground: oklch(0.20 0.04 155);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.20 0.04 155);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.20 0.04 155);
-  --primary: oklch(0.62 0.17 148);
-  --primary-foreground: oklch(0.99 0.01 150);
-  --primary-glow: oklch(0.78 0.18 148);
-  --secondary: oklch(0.95 0.03 150);
-  --secondary-foreground: oklch(0.25 0.05 155);
-  --muted: oklch(0.96 0.015 150);
-  --muted-foreground: oklch(0.50 0.03 155);
-  --accent: oklch(0.92 0.06 150);
-  --accent-foreground: oklch(0.25 0.07 155);
-  --destructive: oklch(0.60 0.22 25);
-  --destructive-foreground: oklch(0.99 0.01 0);
-  --success: oklch(0.65 0.17 148);
-  --warning: oklch(0.78 0.16 75);
-  --info: oklch(0.65 0.13 230);
-  --border: oklch(0.90 0.02 150);
-  --input: oklch(0.92 0.02 150);
-  --ring: oklch(0.62 0.17 148);
-  --chart-1: oklch(0.62 0.17 148);
-  --chart-2: oklch(0.78 0.16 75);
-  --chart-3: oklch(0.65 0.13 230);
-  --chart-4: oklch(0.55 0.20 25);
-  --chart-5: oklch(0.50 0.10 280);
-  --sidebar: oklch(0.20 0.05 155);
-  --sidebar-foreground: oklch(0.92 0.02 150);
-  --sidebar-primary: oklch(0.62 0.17 148);
-  --sidebar-primary-foreground: oklch(0.99 0.01 150);
-  --sidebar-accent: oklch(0.28 0.06 155);
-  --sidebar-accent-foreground: oklch(0.95 0.02 150);
-  --sidebar-border: oklch(0.30 0.05 155);
-  --sidebar-ring: oklch(0.62 0.17 148);
-  --gradient-primary: linear-gradient(135deg, oklch(0.62 0.17 148), oklch(0.78 0.18 148));
-  --shadow-elegant: 0 10px 30px -10px oklch(0.62 0.17 148 / 0.25);
+  --background: #FDFCF7;
+  --foreground: #0F172A;
+
+  --primary: #14532D;
+  --primary-foreground: #FDFCF7;
+
+  --secondary: #F4F4F5;
+  --secondary-foreground: #18181B;
+
+  --muted: #F4F4F5;
+  --muted-foreground: #71717A;
+
+  --border: #E4E4E7;
+  --input: #E4E4E7;
+  --ring: #14532D;
+
+  --success: #10B981;
+  --warning: #FBBF24;
+  --danger: #EF4444;
+
+  --gradient-primary:
+    linear-gradient(
+      135deg,
+      #14532D 0%,
+      #166534 100%
+    );
+
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+
+  --radius: 1rem;
 }
 
 .dark {
