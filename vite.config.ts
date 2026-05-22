@@ -12,4 +12,12 @@ export default defineConfig({
   tanstackStart: {
     server: { entry: "server" },
   },
+  vite: {
+    server: {
+      allowedHosts: ["turf-command-center.onrender.com"],
+    },
+    define: {
+      "process.env": {},
+    },
+  },
 });
