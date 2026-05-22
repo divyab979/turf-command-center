@@ -9,36 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VenuesRouteImport } from './routes/venues'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as CalendarRouteImport } from './routes/calendar'
-import { Route as BookingsRouteImport } from './routes/bookings'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
+import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated/bookings'
+import { Route as AuthenticatedVenuesIndexRouteImport } from './routes/_authenticated/venues/index'
+import { Route as AuthenticatedVenuesVenueIdRouteImport } from './routes/_authenticated/venues/$venueId'
 
-const VenuesRoute = VenuesRouteImport.update({
-  id: '/venues',
-  path: '/venues',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CalendarRoute = CalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BookingsRoute = BookingsRouteImport.update({
-  id: '/bookings',
-  path: '/bookings',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -46,71 +32,102 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedBookingsRoute = AuthenticatedBookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedVenuesIndexRoute =
+  AuthenticatedVenuesIndexRouteImport.update({
+    id: '/venues/',
+    path: '/venues/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedVenuesVenueIdRoute =
+  AuthenticatedVenuesVenueIdRouteImport.update({
+    id: '/venues/$venueId',
+    path: '/venues/$venueId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/bookings': typeof BookingsRoute
-  '/calendar': typeof CalendarRoute
-  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
-  '/venues': typeof VenuesRoute
+  '/bookings': typeof AuthenticatedBookingsRoute
+  '/calendar': typeof AuthenticatedCalendarRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/venues/$venueId': typeof AuthenticatedVenuesVenueIdRoute
+  '/venues/': typeof AuthenticatedVenuesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/bookings': typeof BookingsRoute
-  '/calendar': typeof CalendarRoute
-  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
-  '/venues': typeof VenuesRoute
+  '/bookings': typeof AuthenticatedBookingsRoute
+  '/calendar': typeof AuthenticatedCalendarRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/venues/$venueId': typeof AuthenticatedVenuesVenueIdRoute
+  '/venues': typeof AuthenticatedVenuesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/bookings': typeof BookingsRoute
-  '/calendar': typeof CalendarRoute
-  '/dashboard': typeof DashboardRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
-  '/venues': typeof VenuesRoute
+  '/_authenticated/bookings': typeof AuthenticatedBookingsRoute
+  '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/venues/$venueId': typeof AuthenticatedVenuesVenueIdRoute
+  '/_authenticated/venues/': typeof AuthenticatedVenuesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/login'
     | '/bookings'
     | '/calendar'
     | '/dashboard'
-    | '/login'
-    | '/venues'
+    | '/venues/$venueId'
+    | '/venues/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/bookings' | '/calendar' | '/dashboard' | '/login' | '/venues'
+  to:
+    | '/'
+    | '/login'
+    | '/bookings'
+    | '/calendar'
+    | '/dashboard'
+    | '/venues/$venueId'
+    | '/venues'
   id:
     | '__root__'
     | '/'
-    | '/bookings'
-    | '/calendar'
-    | '/dashboard'
+    | '/_authenticated'
     | '/login'
-    | '/venues'
+    | '/_authenticated/bookings'
+    | '/_authenticated/calendar'
+    | '/_authenticated/dashboard'
+    | '/_authenticated/venues/$venueId'
+    | '/_authenticated/venues/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BookingsRoute: typeof BookingsRoute
-  CalendarRoute: typeof CalendarRoute
-  DashboardRoute: typeof DashboardRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
-  VenuesRoute: typeof VenuesRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/venues': {
-      id: '/venues'
-      path: '/venues'
-      fullPath: '/venues'
-      preLoaderRoute: typeof VenuesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -118,25 +135,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/calendar': {
-      id: '/calendar'
-      path: '/calendar'
-      fullPath: '/calendar'
-      preLoaderRoute: typeof CalendarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/bookings': {
-      id: '/bookings'
-      path: '/bookings'
-      fullPath: '/bookings'
-      preLoaderRoute: typeof BookingsRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -146,16 +149,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/calendar': {
+      id: '/_authenticated/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AuthenticatedCalendarRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/bookings': {
+      id: '/_authenticated/bookings'
+      path: '/bookings'
+      fullPath: '/bookings'
+      preLoaderRoute: typeof AuthenticatedBookingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/venues/': {
+      id: '/_authenticated/venues/'
+      path: '/venues'
+      fullPath: '/venues/'
+      preLoaderRoute: typeof AuthenticatedVenuesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/venues/$venueId': {
+      id: '/_authenticated/venues/$venueId'
+      path: '/venues/$venueId'
+      fullPath: '/venues/$venueId'
+      preLoaderRoute: typeof AuthenticatedVenuesVenueIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
+interface AuthenticatedRouteChildren {
+  AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRoute
+  AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedVenuesVenueIdRoute: typeof AuthenticatedVenuesVenueIdRoute
+  AuthenticatedVenuesIndexRoute: typeof AuthenticatedVenuesIndexRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedBookingsRoute: AuthenticatedBookingsRoute,
+  AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedVenuesVenueIdRoute: AuthenticatedVenuesVenueIdRoute,
+  AuthenticatedVenuesIndexRoute: AuthenticatedVenuesIndexRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BookingsRoute: BookingsRoute,
-  CalendarRoute: CalendarRoute,
-  DashboardRoute: DashboardRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
-  VenuesRoute: VenuesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

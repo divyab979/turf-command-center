@@ -5,12 +5,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useAuthStore } from "@/store/auth-store";
+import { useMutation } from "@tanstack/react-query";
+import { loginUser } from "@/services/auth-service";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
 function LoginPage() {
   const navigate = useNavigate();
+  const login = useAuthStore((s) => s.login);
   const [role, setRole] = useState("owner");
+  const [email, setEmail] = useState("");
+const [password, setPassword] = useState("");
+const mutation = useMutation({
+  mutationFn: loginUser,
+
+  onSuccess: (data) => {
+    login(data);
+
+    navigate({
+      to: "/dashboard",
+    });
+  },
+
+  onError: (error) => {
+    console.error(error);
+    alert("Invalid credentials");
+  },
+});
+
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       <div className="hidden lg:flex relative overflow-hidden" style={{ background: "var(--gradient-primary)" }}>
@@ -37,24 +60,46 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground mt-1">Welcome back. Choose your role.</p>
           <Tabs value={role} onValueChange={setRole} className="mt-5">
             <TabsList className="grid grid-cols-3 w-full">
-              <TabsTrigger value="super">Super</TabsTrigger>
+              <TabsTrigger value="super_admin">Super</TabsTrigger>
               <TabsTrigger value="owner">Owner</TabsTrigger>
-              <TabsTrigger value="sup">Supervisor</TabsTrigger>
+              <TabsTrigger value="supervisor">Supervisor</TabsTrigger>
             </TabsList>
             <TabsContent value={role} className="mt-5 space-y-4">
               <div>
                 <Label>Email or mobile</Label>
-                <Input placeholder="owner@gameup11.com" defaultValue="rohan@gameup11.com" className="mt-1.5" />
+                <Input
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+  placeholder="johndoe@test.com"
+  className="mt-1.5"
+/>
               </div>
               <div>
                 <Label>Password</Label>
-                <Input type="password" placeholder="••••••••" defaultValue="demo1234" className="mt-1.5" />
+                <Input
+  type="password"
+  value={password}
+  onChange={(e) => setPassword(e.target.value)}
+  placeholder="Password"
+  className="mt-1.5"
+/>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2 text-muted-foreground"><input type="checkbox" className="accent-primary" defaultChecked /> Remember me</label>
                 <a className="text-primary hover:underline" href="#">Forgot?</a>
               </div>
-              <Button onClick={() => navigate({ to: "/dashboard" })} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">Sign in</Button>
+            <Button
+  onClick={() => {
+    mutation.mutate({
+      email,
+      password,
+    });
+  }}
+  disabled={mutation.isPending}
+  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+>
+  {mutation.isPending ? "Signing in..." : "Sign in"}
+</Button>
               <div className="text-xs text-center text-muted-foreground">Demo: any credentials sign you in as the selected role.</div>
             </TabsContent>
           </Tabs>
