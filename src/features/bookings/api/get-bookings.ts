@@ -26,7 +26,9 @@ export async function getBookings(): Promise<Booking[]> {
         "Unknown Venue",
 
       slot:
-        `${booking.bookingDate ? new Date(booking.bookingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''} • ${booking.slot?.startTime} - ${booking.slot?.endTime}`,
+        booking.slot
+          ? `${booking.bookingDate ? new Date(booking.bookingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''} • ${booking.slot.startTime} - ${booking.slot.endTime}`
+          : `${booking.bookingDate ? new Date(booking.bookingDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : ''} • ${booking.startTime || ''} - ${booking.endTime || ''} (Custom)`,
 
       amount:
         booking.totalAmount,
@@ -34,6 +36,18 @@ export async function getBookings(): Promise<Booking[]> {
       status:
         booking.status
           ?.toLowerCase(),
+
+      cashPaymentRequested:
+        booking.cashPaymentRequested,
+
+      paymentStatus:
+        booking.paymentStatus,
+
+      advancePaid:
+        booking.advancePaid,
+
+      remainingAmount:
+        booking.remainingAmount,
     })
   );
 }

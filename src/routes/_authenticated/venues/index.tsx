@@ -28,7 +28,7 @@ function VenuesPage() {
 
   useEffect(() => {
     if (data.length) {
-      const initial = data.map((venue, idx) => ({
+      const initial = data.map((venue: any, idx) => ({
         ...venue,
         status: "Approved",
         address: venue.address || `${venue.name} Street, ${venue.location}`,

@@ -37,6 +37,7 @@ import { StatusBadge } from "./status-badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { getBookings } from "@/features/bookings/api/get-bookings";
+import { getSplitPayments, getPaymentMethodBreakdown, getMonthlyRevenueTrend } from "@/utils/payment-store";
 
 interface Props {
   view?: string;
@@ -147,6 +148,75 @@ export function SuperAdminDashboard({ view = "dashboard" }: Props) {
     if (dbBookings.length === 0) return 4820;
     const unique = new Set(dbBookings.map(b => b.customer));
     return unique.size;
+  }, [dbBookings]);
+
+  const dynamicStats = useMemo(() => {
+    const bookingsList = dbBookings.length > 0 ? dbBookings : [
+      { id: "BK-1024", amount: 15000, date: "May 12", status: "confirmed" },
+      { id: "BK-1025", amount: 26000, date: "May 13", status: "confirmed" },
+      { id: "BK-1026", amount: 24000, date: "May 14", status: "confirmed" },
+      { id: "BK-1027", amount: 32000, date: "May 15", status: "confirmed" },
+      { id: "BK-1028", amount: 38000, date: "May 16", status: "confirmed" },
+      { id: "BK-1029", amount: 45000, date: "May 17", status: "confirmed" },
+      { id: "BK-1030", amount: 35000, date: "May 18", status: "confirmed" },
+    ];
+
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    let monthRevenue = 0;
+    let yearRevenue = 0;
+
+    bookingsList.forEach((b: any) => {
+      const status = (b.status || "").toLowerCase();
+      if (status === "cancelled") return;
+
+      const amt = b.amount || b.totalAmount || 0;
+      const splits = getSplitPayments(b.id, amt);
+      const paid = splits.reduce((sum, s) => sum + s.amount, 0);
+
+      const dateVal = b.slotDate || b.date || b.createdAt;
+      let monthVal = currentMonth;
+      let yearVal = currentYear;
+      if (dateVal) {
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+          monthVal = d.getMonth();
+          yearVal = d.getFullYear();
+        } else if (typeof dateVal === "string") {
+          const lower = dateVal.toLowerCase();
+          const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+          for (let i = 0; i < 12; i++) {
+            if (lower.includes(months[i])) {
+              monthVal = i;
+              break;
+            }
+          }
+        }
+      } else if (b.id) {
+        const num = parseInt(b.id.replace(/\D/g, ""), 10);
+        if (!isNaN(num)) {
+          monthVal = num % 12;
+        }
+      }
+
+      if (yearVal === currentYear) {
+        yearRevenue += paid;
+        if (monthVal === currentMonth) {
+          monthRevenue += paid;
+        }
+      }
+    });
+
+    const breakdown = getPaymentMethodBreakdown(bookingsList);
+    const trend = getMonthlyRevenueTrend(bookingsList);
+
+    return {
+      monthRevenue,
+      yearRevenue,
+      breakdown,
+      trend,
+    };
   }, [dbBookings]);
 
   // --- MOCK STATES ---
@@ -493,20 +563,52 @@ export function SuperAdminDashboard({ view = "dashboard" }: Props) {
           />
         </div>
 
+        {/* Payment breakdown and Monthly/Yearly Revenue KPIs */}
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4 mt-4">
+          <KpiCard
+            title="This Month's Revenue"
+            value={`₹${dynamicStats.monthRevenue.toLocaleString()}`}
+            change="Across platform"
+            positive
+            icon={IndianRupee}
+          />
+          <KpiCard
+            title="This Year's Revenue"
+            value={`₹${dynamicStats.yearRevenue.toLocaleString()}`}
+            change="Current calendar year"
+            positive
+            icon={TrendingUp}
+          />
+          <KpiCard
+            title="Cash / UPI Revenue"
+            value={`₹${dynamicStats.breakdown.cash.toLocaleString()} / ₹${dynamicStats.breakdown.UPI.toLocaleString()}`}
+            change="Platform aggregate"
+            positive
+            icon={IndianRupee}
+          />
+          <KpiCard
+            title="Card / Transfer / Other"
+            value={`₹${(dynamicStats.breakdown.card || 0).toLocaleString()} / ₹${(dynamicStats.breakdown["bank transfer"] || 0).toLocaleString()}`}
+            change={`Other: ₹${(dynamicStats.breakdown.other || 0).toLocaleString()}`}
+            positive
+            icon={Building}
+          />
+        </div>
+
         {/* Charts */}
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <SectionCard title="Platform Revenue & Bookings Trend">
+            <SectionCard title={`Monthly Revenue Trend (${new Date().getFullYear()})`}>
               <div className="h-[320px] w-full mt-4">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={bookingTrend}>
+                  <AreaChart data={dynamicStats.trend}>
                     <defs>
                       <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#14532D" stopOpacity={0.2} />
                         <stop offset="95%" stopColor="#14532D" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="date" stroke="#94A3B8" fontSize={11} />
+                    <XAxis dataKey="month" stroke="#94A3B8" fontSize={11} />
                     <Tooltip
                       contentStyle={{
                         background: "rgba(255, 255, 255, 0.95)",
@@ -514,11 +616,12 @@ export function SuperAdminDashboard({ view = "dashboard" }: Props) {
                         borderRadius: "16px",
                         boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                       }}
+                      formatter={(value) => [`₹${value.toLocaleString()}`, "Revenue"]}
                     />
                     <Area
                       type="monotone"
                       dataKey="revenue"
-                      name="Revenue (₹)"
+                      name="Revenue"
                       stroke="#14532D"
                       strokeWidth={2}
                       fillOpacity={1}

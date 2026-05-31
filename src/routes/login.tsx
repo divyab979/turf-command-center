@@ -39,7 +39,7 @@ const mutation = useMutation({
 
     navigate({
       to: "/dashboard",
-    });
+    } as any);
   },
 
   onError: (error) => {

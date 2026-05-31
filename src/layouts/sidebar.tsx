@@ -143,14 +143,15 @@ export const Sidebar = () => {
               {section.title}
             </p>
             <nav className="space-y-0.5">
-              {section.items.map((item) => {
+              {section.items.map((item: any) => {
                 const Icon = item.icon;
                 const active =
                   pathname === item.to &&
                   (item.search ? activeView === item.search.view : !activeView);
 
+                const LinkComponent = Link as any;
                 return (
-                  <Link
+                  <LinkComponent
                     key={item.label + (item.search?.view || "")}
                     to={item.to}
                     search={item.search}
@@ -165,7 +166,7 @@ export const Sidebar = () => {
                   >
                     <Icon size={17} />
                     <span>{item.label}</span>
-                  </Link>
+                  </LinkComponent>
                 );
               })}
             </nav>

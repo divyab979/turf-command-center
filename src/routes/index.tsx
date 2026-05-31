@@ -6,5 +6,6 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  return <Navigate to="/dashboard" />;
+  const NavigateComponent = Navigate as any;
+  return <NavigateComponent to="/dashboard" />;
 }

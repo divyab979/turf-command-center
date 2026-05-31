@@ -20,6 +20,8 @@ const AVAILABLE_AMENITIES = [
   "drinking water",
   "café",
   "changing room",
+  "AC",
+  "Wi-Fi",
 ];
 
 export const CreateVenueForm = ({ venueId, onSuccess }: Props) => {
@@ -33,6 +35,15 @@ export const CreateVenueForm = ({ venueId, onSuccess }: Props) => {
   const [amenities, setAmenities] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const [businessType, setBusinessType] = useState("TURF");
+  const [gamesHosted, setGamesHosted] = useState<string[]>([]);
+  const [numPoolTables, setNumPoolTables] = useState<string>("");
+  const [numSnookerTables, setNumSnookerTables] = useState<string>("");
+  const [numTvScreens, setNumTvScreens] = useState<string>("");
+  const [numPsConsoles, setNumPsConsoles] = useState<string>("");
+  const [numControllers, setNumControllers] = useState<string>("");
+  const [description, setDescription] = useState("");
+
   const isEditMode = !!venueId;
 
   // Load existing data from backend if in edit mode
@@ -45,8 +56,17 @@ export const CreateVenueForm = ({ venueId, onSuccess }: Props) => {
             setName(venue.name || "");
             setLocation(venue.location || "");
             setAddress(venue.address || `${venue.name} Street, ${venue.location}`);
-            setPhotos(venue.photos || ["https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?w=800"]);
+            setPhotos(venue.photos || venue.images?.map((im: any) => im.url) || ["https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?w=800"]);
             setAmenities(venue.amenities || ["parking", "washroom", "floodlights"]);
+
+            setBusinessType(venue.businessType || "TURF");
+            setGamesHosted(venue.gamesHosted || []);
+            setNumPoolTables(venue.numPoolTables?.toString() || "");
+            setNumSnookerTables(venue.numSnookerTables?.toString() || "");
+            setNumTvScreens(venue.numTvScreens?.toString() || "");
+            setNumPsConsoles(venue.numPsConsoles?.toString() || "");
+            setNumControllers(venue.numControllers?.toString() || "");
+            setDescription(venue.description || "");
           }
         })
         .catch((err) => {
@@ -93,19 +113,27 @@ export const CreateVenueForm = ({ venueId, onSuccess }: Props) => {
 
     try {
       setSaving(true);
+      const payload = {
+        name,
+        location,
+        address,
+        businessType,
+        gamesHosted,
+        numPoolTables: numPoolTables ? parseInt(numPoolTables) : null,
+        numSnookerTables: numSnookerTables ? parseInt(numSnookerTables) : null,
+        numTvScreens: numTvScreens ? parseInt(numTvScreens) : null,
+        numPsConsoles: numPsConsoles ? parseInt(numPsConsoles) : null,
+        numControllers: numControllers ? parseInt(numControllers) : null,
+        description,
+        amenities,
+        imageUrls: photos,
+      };
+
       if (isEditMode) {
-        // Edit Mode: PATCH /venues/:id
-        await api.patch(`/venues/${venueId}`, {
-          name,
-          location,
-        });
+        await api.patch(`/venues/${venueId}`, payload);
         toast.success("Venue successfully updated");
       } else {
-        // Create Mode: POST /venues
-        await api.post("/venues", {
-          name,
-          location,
-        });
+        await api.post("/venues", payload);
         toast.success("New Venue successfully registered");
       }
 
@@ -167,6 +195,114 @@ export const CreateVenueForm = ({ venueId, onSuccess }: Props) => {
           </div>
         </div>
       </div>
+
+      <div>
+        <Label className="text-slate-500 font-bold">Business Type</Label>
+        <select
+          value={businessType}
+          onChange={(e) => setBusinessType(e.target.value)}
+          className="mt-2 w-full rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-800"
+        >
+          <option value="TURF">Sports Turf / Ground</option>
+          <option value="GAME_ROOM">Snooker Club / Game Room / Game Hub</option>
+        </select>
+      </div>
+
+      {businessType === "GAME_ROOM" && (
+        <div className="space-y-4 border-l-2 border-emerald-600 pl-4 mt-2">
+          <div>
+            <Label className="text-slate-500 font-bold">Games Hosted</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {["pool", "snooker", "playstation", "other"].map((game) => {
+                const isSelected = gamesHosted.includes(game);
+                return (
+                  <button
+                    type="button"
+                    key={game}
+                    onClick={() => {
+                      setGamesHosted((prev) =>
+                        prev.includes(game)
+                          ? prev.filter((g) => g !== game)
+                          : [...prev, game]
+                      );
+                    }}
+                    className={`px-3 py-1.5 rounded-full border text-xs font-bold transition-all capitalize ${
+                      isSelected
+                        ? "bg-emerald-800 text-white border-emerald-800"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    {game}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-slate-500 font-bold">Number of Pool Tables</Label>
+              <Input
+                type="number"
+                value={numPoolTables}
+                onChange={(e) => setNumPoolTables(e.target.value)}
+                placeholder="0"
+                className="mt-2 rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-slate-500 font-bold">Number of Snooker Tables</Label>
+              <Input
+                type="number"
+                value={numSnookerTables}
+                onChange={(e) => setNumSnookerTables(e.target.value)}
+                placeholder="0"
+                className="mt-2 rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-slate-500 font-bold">Number of TV/Screens</Label>
+              <Input
+                type="number"
+                value={numTvScreens}
+                onChange={(e) => setNumTvScreens(e.target.value)}
+                placeholder="0"
+                className="mt-2 rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-slate-500 font-bold">Number of PS Consoles</Label>
+              <Input
+                type="number"
+                value={numPsConsoles}
+                onChange={(e) => setNumPsConsoles(e.target.value)}
+                placeholder="0"
+                className="mt-2 rounded-xl"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-slate-500 font-bold">Number of Controllers</Label>
+              <Input
+                type="number"
+                value={numControllers}
+                onChange={(e) => setNumControllers(e.target.value)}
+                placeholder="0"
+                className="mt-2 rounded-xl"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-slate-500 font-bold">Business Description</Label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter details about your club/game room..."
+              className="mt-2 w-full min-h-[80px] rounded-xl border border-slate-200 p-2.5 text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-800"
+            />
+          </div>
+        </div>
+      )}
 
       <div>
         <Label className="text-slate-500 font-bold">Full Venue Address</Label>

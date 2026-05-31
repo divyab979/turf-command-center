@@ -11,4 +11,8 @@ export interface Booking {
   slot: string;
   amount: number;
   status: BookingStatus;
+  cashPaymentRequested?: boolean;
+  paymentStatus?: string;
+  advancePaid?: number;
+  remainingAmount?: number;
 }

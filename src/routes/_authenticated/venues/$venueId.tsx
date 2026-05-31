@@ -86,6 +86,14 @@ function VenueDetailPage() {
     setSlotDrawerOpen,
   ] = useState(false);
 
+  // Slot mode: 'generate' (bulk) or 'manual' (single slot)
+  const [slotMode, setSlotMode] = useState<"generate" | "manual">("generate");
+  const [manualSlotDate, setManualSlotDate] = useState("");
+  const [manualSlotStart, setManualSlotStart] = useState("");
+  const [manualSlotEnd, setManualSlotEnd] = useState("");
+  const [manualSlotPrice, setManualSlotPrice] = useState("");
+  const [manualSlotDuration, setManualSlotDuration] = useState(1);
+
 const [
   selectedTurfId,
   setSelectedTurfId,
@@ -245,7 +253,7 @@ const queryClient =
   const [activeVenueImgIdx, setActiveVenueImgIdx] = useState(0);
   const [activeTurfImgIdx, setActiveTurfImgIdx] = useState<{ [turfId: string]: number }>({});
   const [editVenueOpen, setEditVenueOpen] = useState(false);
-  const [turfPhotos, setTurfPhotos] = useState<string[]>([]);
+  const [turfPhotos, setTurfPhotos] = useState<{ url: string; file?: File }[]>([]);
   const [newTurfPhotoUrl, setNewTurfPhotoUrl] = useState("");
   const [customSports, setCustomSports] = useState<string[]>([]);
 
@@ -264,10 +272,11 @@ const queryClient =
         .then((res) => {
           const venue = res.data;
           if (venue) {
+            const dbPhotos = venue.images && venue.images.length > 0 ? venue.images.map((im: any) => im.url) : null;
             setVenueDetails({
               ...venue,
               address: venue.address || `${venue.name} Street, ${venue.location}`,
-              photos: venue.photos || ["https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?w=800"],
+              photos: dbPhotos || venue.photos || ["https://images.unsplash.com/photo-1587280501635-68a0e82cd5ff?w=800"],
               amenities: venue.amenities || ["parking", "washroom", "floodlights"],
             });
           }
@@ -302,16 +311,30 @@ const queryClient =
     }
 
     try {
-      await api.post(`/turfs/${venueId}`, {
+      const res = await api.post(`/turfs/${venueId}`, {
         name,
         sport,
         description,
       });
+      const newTurf = res.data;
+
+      for (const photo of turfPhotos) {
+        if (photo.file) {
+          const formData = new FormData();
+          formData.append("file", photo.file);
+          await api.post(`/turfs/${newTurf.id}/image`, formData, {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          });
+        } else if (photo.url) {
+          await api.post(`/turfs/${newTurf.id}/image-url`, { url: photo.url });
+        }
+      }
 
       setName("");
       setSport("");
       setDescription("");
-      setImage(null);
       setTurfPhotos([]);
       setOpen(false);
       toast.success("Turf successfully created");
@@ -354,7 +377,7 @@ const queryClient =
               onClick={() => setOpen(true)}
               className="rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold"
             >
-              Add Turf
+              {venueDetails?.businessType === "GAME_ROOM" ? "Add Table / Court" : "Add Turf"}
             </Button>
           </div>
         }
@@ -431,6 +454,74 @@ const queryClient =
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {venueDetails.businessType === "GAME_ROOM" && (
+            <div className="border-t border-slate-100 pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Game Room Info</h3>
+                <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-slate-500">Booking Mode:</span>
+                    <span className="text-emerald-800 uppercase font-extrabold">
+                      {venueDetails.bookingMode === "CUSTOM_DURATION" ? "Custom Duration / Manual" : "Fixed Slots"}
+                    </span>
+                  </div>
+                  {venueDetails.gamesHosted && venueDetails.gamesHosted.length > 0 && (
+                    <div className="flex justify-between text-xs font-semibold">
+                      <span className="text-slate-500">Games Hosted:</span>
+                      <span className="text-slate-800 capitalize font-bold">
+                        {venueDetails.gamesHosted.join(", ")}
+                      </span>
+                    </div>
+                  )}
+                  {venueDetails.description && (
+                    <div className="text-xs font-semibold space-y-1">
+                      <span className="text-slate-500 block">Description:</span>
+                      <p className="text-slate-700 font-medium leading-relaxed bg-white border border-slate-100 rounded-xl p-2.5">
+                        {venueDetails.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Equipment & Inventory</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {venueDetails.numPoolTables !== null && venueDetails.numPoolTables !== undefined && (
+                    <div className="bg-slate-50 rounded-2xl p-3 text-center border border-slate-100/50">
+                      <span className="text-[10px] text-slate-500 font-extrabold uppercase">Pool Tables</span>
+                      <p className="text-lg font-extrabold text-emerald-800 mt-1">{venueDetails.numPoolTables}</p>
+                    </div>
+                  )}
+                  {venueDetails.numSnookerTables !== null && venueDetails.numSnookerTables !== undefined && (
+                    <div className="bg-slate-50 rounded-2xl p-3 text-center border border-slate-100/50">
+                      <span className="text-[10px] text-slate-500 font-extrabold uppercase">Snooker Tables</span>
+                      <p className="text-lg font-extrabold text-emerald-800 mt-1">{venueDetails.numSnookerTables}</p>
+                    </div>
+                  )}
+                  {venueDetails.numTvScreens !== null && venueDetails.numTvScreens !== undefined && (
+                    <div className="bg-slate-50 rounded-2xl p-3 text-center border border-slate-100/50">
+                      <span className="text-[10px] text-slate-500 font-extrabold uppercase">TV/Screens</span>
+                      <p className="text-lg font-extrabold text-emerald-800 mt-1">{venueDetails.numTvScreens}</p>
+                    </div>
+                  )}
+                  {venueDetails.numPsConsoles !== null && venueDetails.numPsConsoles !== undefined && (
+                    <div className="bg-slate-50 rounded-2xl p-3 text-center border border-slate-100/50">
+                      <span className="text-[10px] text-slate-500 font-extrabold uppercase">PS Consoles</span>
+                      <p className="text-lg font-extrabold text-emerald-800 mt-1">{venueDetails.numPsConsoles}</p>
+                    </div>
+                  )}
+                  {venueDetails.numControllers !== null && venueDetails.numControllers !== undefined && (
+                    <div className="bg-slate-50 rounded-2xl p-3 text-center col-span-2 border border-slate-100/50">
+                      <span className="text-[10px] text-slate-500 font-extrabold uppercase">Controllers</span>
+                      <p className="text-lg font-extrabold text-emerald-800 mt-1">{venueDetails.numControllers}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -730,7 +821,7 @@ const queryClient =
       );
     }}
   >
-    Generate Slots
+    {venueDetails?.businessType === "GAME_ROOM" ? "Generate Table Slots" : "Generate Slots"}
   </Button>
 
 </div>
@@ -791,32 +882,43 @@ const queryClient =
       <DetailDrawer
         open={open}
         onOpenChange={setOpen}
-        title="Create Turf"
-        description="Add a playable turf/court to this venue"
+        title={venueDetails?.businessType === "GAME_ROOM" ? "Create Table / Court" : "Create Turf"}
+        description={venueDetails?.businessType === "GAME_ROOM" ? "Add a table or court to this Game Room venue" : "Add a playable turf/court to this venue"}
       >
         <div className="space-y-6 font-medium text-slate-700 text-xs">
           <div>
-            <Label className="text-slate-500 font-bold">Turf Name</Label>
+            <Label className="text-slate-500 font-bold">
+              {venueDetails?.businessType === "GAME_ROOM" ? "Table / Court Name" : "Turf Name"}
+            </Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Football Turf A"
+              placeholder={venueDetails?.businessType === "GAME_ROOM" ? "e.g. Snooker Table 1" : "e.g. Football Turf A"}
               className="mt-2 rounded-xl"
             />
           </div>
 
           <div>
-            <Label className="text-slate-500 font-bold">Sport</Label>
+            <Label className="text-slate-500 font-bold">
+              {venueDetails?.businessType === "GAME_ROOM" ? "Game / Activity" : "Sport"}
+            </Label>
             <Select value={sport} onValueChange={setSport}>
               <SelectTrigger className="mt-2 rounded-xl">
-                <SelectValue placeholder="Select sport" />
+                <SelectValue placeholder={venueDetails?.businessType === "GAME_ROOM" ? "Select game" : "Select sport"} />
               </SelectTrigger>
               <SelectContent>
-                {customSports.map((sportKey) => (
-                  <SelectItem key={sportKey} value={sportKey}>
-                    {sportKey.charAt(0) + sportKey.slice(1).toLowerCase()}
-                  </SelectItem>
-                ))}
+                {venueDetails?.businessType === "GAME_ROOM"
+                  ? (venueDetails?.gamesHosted ?? ["pool", "snooker", "playstation", "other"]).map((game: string) => (
+                      <SelectItem key={game} value={game.toUpperCase()}>
+                        {game.charAt(0).toUpperCase() + game.slice(1)}
+                      </SelectItem>
+                    ))
+                  : customSports.map((sportKey) => (
+                      <SelectItem key={sportKey} value={sportKey}>
+                        {sportKey.charAt(0) + sportKey.slice(1).toLowerCase()}
+                      </SelectItem>
+                    ))
+                }
               </SelectContent>
             </Select>
           </div>
@@ -841,7 +943,7 @@ const queryClient =
                   const file = e.target.files?.[0];
                   if (file) {
                     const url = URL.createObjectURL(file);
-                    setTurfPhotos((prev) => [...prev, url]);
+                    setTurfPhotos((prev) => [...prev, { url, file }]);
                     toast.success("Turf photo uploaded successfully");
                   }
                 }}
@@ -870,8 +972,9 @@ const queryClient =
               <Button
                 type="button"
                 onClick={() => {
-                  if (newTurfPhotoUrl.trim() && !turfPhotos.includes(newTurfPhotoUrl.trim())) {
-                    setTurfPhotos((prev) => [...prev, newTurfPhotoUrl.trim()]);
+                  const trimmed = newTurfPhotoUrl.trim();
+                  if (trimmed && !turfPhotos.some((p) => p.url === trimmed)) {
+                    setTurfPhotos((prev) => [...prev, { url: trimmed }]);
                     setNewTurfPhotoUrl("");
                   }
                 }}
@@ -885,10 +988,10 @@ const queryClient =
               <div className="grid grid-cols-3 gap-2 mt-3 max-h-32 overflow-y-auto p-1 bg-slate-50 rounded-xl border border-slate-100">
                 {turfPhotos.map((p, idx) => (
                   <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-video bg-white">
-                    <img src={p} alt="Turf preview" className="w-full h-full object-cover" />
+                    <img src={p.url} alt="Turf preview" className="w-full h-full object-cover" />
                     <button
                       type="button"
-                      onClick={() => setTurfPhotos((prev) => prev.filter((u) => u !== p))}
+                      onClick={() => setTurfPhotos((prev) => prev.filter((item) => item.url !== p.url))}
                       className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X size={10} />
@@ -930,26 +1033,138 @@ const queryClient =
         />
       </DetailDrawer>
 
-      <DetailDrawer
+  <DetailDrawer
   open={slotDrawerOpen}
-  onOpenChange={
-    setSlotDrawerOpen
-  }
-  title="Generate Slots"
-  description="Create operational booking slots for this turf"
+  onOpenChange={(v) => {
+    setSlotDrawerOpen(v);
+    if (!v) setSlotMode("generate");
+  }}
+  title={venueDetails?.businessType === "GAME_ROOM" ? "Add Slots for Table" : "Generate Slots"}
+  description={venueDetails?.businessType === "GAME_ROOM" ? "Create fixed-time booking slots for this table or court" : "Create operational booking slots for this turf"}
 >
 
-  <GenerateSlotsForm
-    turfId={selectedTurfId}
-    onSuccess={() => {
+  {/* Mode toggle */}
+  <div className="flex bg-slate-100 p-1 rounded-2xl w-full font-bold text-xs gap-1 shadow-sm mb-5">
+    <button
+      onClick={() => setSlotMode("generate")}
+      className={`flex-1 py-2 rounded-xl transition-all ${
+        slotMode === "generate"
+          ? "bg-white text-slate-800 shadow-sm"
+          : "text-slate-500 hover:text-slate-700"
+      }`}
+    >
+      Generate (Bulk)
+    </button>
+    <button
+      onClick={() => setSlotMode("manual")}
+      className={`flex-1 py-2 rounded-xl transition-all ${
+        slotMode === "manual"
+          ? "bg-white text-slate-800 shadow-sm"
+          : "text-slate-500 hover:text-slate-700"
+      }`}
+    >
+      Manual (Single)
+    </button>
+  </div>
 
-      setSlotDrawerOpen(
-        false
-      );
-
-      loadTurfs();
-    }}
-  />
+  {slotMode === "generate" ? (
+    <GenerateSlotsForm
+      turfId={selectedTurfId}
+      onSuccess={() => {
+        setSlotDrawerOpen(false);
+        loadTurfs();
+      }}
+    />
+  ) : (
+    <div className="space-y-4 font-medium text-slate-700 text-xs">
+      <div>
+        <Label className="text-slate-500 font-bold">Date</Label>
+        <Input
+          type="date"
+          value={manualSlotDate}
+          onChange={(e) => setManualSlotDate(e.target.value)}
+          className="mt-2 rounded-xl"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label className="text-slate-500 font-bold">Start Time</Label>
+          <Input
+            type="time"
+            value={manualSlotStart}
+            onChange={(e) => setManualSlotStart(e.target.value)}
+            className="mt-2 rounded-xl"
+          />
+        </div>
+        <div>
+          <Label className="text-slate-500 font-bold">End Time</Label>
+          <Input
+            type="time"
+            value={manualSlotEnd}
+            onChange={(e) => setManualSlotEnd(e.target.value)}
+            className="mt-2 rounded-xl"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label className="text-slate-500 font-bold">Price (₹)</Label>
+          <Input
+            type="number"
+            value={manualSlotPrice}
+            onChange={(e) => setManualSlotPrice(e.target.value)}
+            className="mt-2 rounded-xl"
+            placeholder="e.g. 300"
+          />
+        </div>
+        <div>
+          <Label className="text-slate-500 font-bold">Duration (hours)</Label>
+          <Select value={String(manualSlotDuration)} onValueChange={(v) => setManualSlotDuration(Number(v))}>
+            <SelectTrigger className="mt-2 rounded-xl">
+              <SelectValue placeholder="Duration" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0.5">30 min</SelectItem>
+              <SelectItem value="1">1 hour</SelectItem>
+              <SelectItem value="1.5">1.5 hours</SelectItem>
+              <SelectItem value="2">2 hours</SelectItem>
+              <SelectItem value="3">3 hours</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <Button
+        onClick={async () => {
+          if (!manualSlotDate || !manualSlotStart || !manualSlotEnd || !manualSlotPrice) {
+            toast.error("Please fill in all fields");
+            return;
+          }
+          try {
+            await api.post(`/slots/${selectedTurfId}/manual`, {
+              date: manualSlotDate,
+              startTime: manualSlotStart,
+              endTime: manualSlotEnd,
+              price: parseFloat(manualSlotPrice),
+              duration: manualSlotDuration,
+            });
+            toast.success("Slot created successfully");
+            setManualSlotDate("");
+            setManualSlotStart("");
+            setManualSlotEnd("");
+            setManualSlotPrice("");
+            setManualSlotDuration(1);
+            setSlotDrawerOpen(false);
+            loadTurfs();
+          } catch (err: any) {
+            toast.error(err.response?.data?.message || "Failed to create slot");
+          }
+        }}
+        className="w-full rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold h-11 mt-2"
+      >
+        Create Slot
+      </Button>
+    </div>
+  )}
 
 </DetailDrawer>
 

@@ -13,9 +13,13 @@ import { useBookings } from "@/features/bookings/hooks/use-bookings";
 import { PageLoader } from "@/components/feedback/page-loader";
 import { EmptyState } from "@/components/feedback/empty-state";
 import { ErrorState } from "@/components/feedback/error-state";
-import type { Booking } from "@/features/bookings/types/booking.types";
+import type { Booking, BookingStatus } from "@/features/bookings/types/booking.types";
 import { useAuthStore } from "@/store/auth-store";
 import { toast } from "sonner";
+import { getSplitPayments, saveSplitPayments, SplitPaymentEntry } from "@/utils/payment-store";
+import { api } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/_authenticated/bookings")({
   component: BookingsPage,
@@ -24,6 +28,83 @@ export const Route = createFileRoute("/_authenticated/bookings")({
 function BookingsPage() {
   const { user } = useAuthStore();
   const role = user?.role || "SUPERVISOR";
+
+  const queryClient = useQueryClient();
+
+  // Custom Booking States
+  const [customBookingOpen, setCustomBookingOpen] = useState(false);
+  const [customVenueId, setCustomVenueId] = useState("");
+  const [customCustomerName, setCustomCustomerName] = useState("");
+  const [customCustomerPhone, setCustomCustomerPhone] = useState("");
+  const [customStartTime, setCustomStartTime] = useState("");
+  const [customEndTime, setCustomEndTime] = useState("");
+  const [customAmount, setCustomAmount] = useState("");
+  const [customGameActivity, setCustomGameActivity] = useState("SNOOKER");
+  const [customPaymentMethod, setCustomPaymentMethod] = useState("CASH");
+  const [customNotes, setCustomNotes] = useState("");
+  const [isSavingCustom, setIsSavingCustom] = useState(false);
+  const [gameRoomVenues, setGameRoomVenues] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.get("/venues")
+      .then((res) => {
+        const list = res.data || [];
+        const filtered = list.filter((v: any) => {
+          const isGameRoom = v.businessType === "GAME_ROOM";
+          if (role === "SUPERVISOR") {
+            return isGameRoom && v.id === (user as any)?.venueId;
+          }
+          return isGameRoom;
+        });
+        setGameRoomVenues(filtered);
+      })
+      .catch((err) => console.error("Error loading venues for custom booking", err));
+  }, [role, user]);
+
+  const handleCreateCustomBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customVenueId || !customCustomerName || !customStartTime || !customEndTime || !customAmount) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    try {
+      setIsSavingCustom(true);
+      await api.post("/bookings/custom", {
+        venueId: customVenueId,
+        customerName: customCustomerName,
+        customerPhone: customCustomerPhone,
+        startTime: customStartTime,
+        endTime: customEndTime,
+        totalAmount: parseFloat(customAmount),
+        gameActivity: customGameActivity,
+        paymentMethod: customPaymentMethod,
+        notes: customNotes,
+      });
+
+      toast.success("Custom guest entry successfully created");
+      setCustomBookingOpen(false);
+      
+      // Reset form
+      setCustomCustomerName("");
+      setCustomCustomerPhone("");
+      setCustomStartTime("");
+      setCustomEndTime("");
+      setCustomAmount("");
+      setCustomGameActivity("SNOOKER");
+      setCustomPaymentMethod("CASH");
+      setCustomNotes("");
+
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      window.location.reload();
+    } catch (err: any) {
+      console.error(err);
+      const msg = err.response?.data?.message || "Failed to create guest entry";
+      toast.error(msg);
+    } finally {
+      setIsSavingCustom(false);
+    }
+  };
 
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -91,15 +172,77 @@ function BookingsPage() {
     if (bookingsData.length && !localBookings.length) {
       // Clean and normalize role-based sample venues/data
       setLocalBookings(
-        bookingsData.map((b, idx) => ({
-          ...b,
-          // Preserve real venue name, fallback to mock distribution for testing
-          venue: b.venue && b.venue !== "Unknown Venue" ? b.venue : (idx % 3 === 0 ? "Arena Turf" : idx % 3 === 1 ? "Goal Sports" : "Wembley Turf"),
-          due: idx % 2 === 0 ? 500 : 0,
-        }))
+        bookingsData.map((b, idx) => {
+          const venue = b.venue && b.venue !== "Unknown Venue" ? b.venue : (idx % 3 === 0 ? "Arena Turf" : idx % 3 === 1 ? "Goal Sports" : "Wembley Turf");
+          const splits = getSplitPayments(b.id, b.amount);
+          const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
+          const due = Math.max(0, b.amount - totalPaid);
+          return {
+            ...b,
+            venue,
+            due,
+          };
+        })
       );
     }
   }, [bookingsData]);
+
+  // Split payment state
+  const [splitMethod, setSplitMethod] = useState<"cash" | "UPI" | "bank transfer" | "card" | "other">("cash");
+  const [splitAmountInput, setSplitAmountInput] = useState("");
+  const [splitNote, setSplitNote] = useState("");
+
+  const handleMarkNoShow = (id: string) => {
+    handleUpdateStatus(id, "cancelled");
+  };
+
+  const handleRecordSplitPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBooking) return;
+    const amountVal = parseFloat(splitAmountInput);
+    if (isNaN(amountVal) || amountVal <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    
+    const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount);
+    const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
+    const due = Math.max(0, selectedBooking.amount - totalPaid);
+    
+    if (amountVal > due) {
+      toast.error(`Amount cannot exceed remaining due of ₹${due}`);
+      return;
+    }
+    
+    const newEntry: SplitPaymentEntry = {
+      id: `split-${Date.now()}`,
+      method: splitMethod,
+      amount: amountVal,
+      note: splitNote,
+      recordedBy: `${user?.name || "Unknown"} (${user?.role || "SUPERVISOR"})`,
+      timestamp: new Date().toLocaleString(),
+    };
+    
+    const hasOnlyDefault = splits.length === 1 && splits[0].id.startsWith("default-");
+    const updatedSplits = hasOnlyDefault ? [newEntry] : [...splits, newEntry];
+    saveSplitPayments(selectedBooking.id, updatedSplits);
+    
+    const newTotalPaid = (hasOnlyDefault ? 0 : totalPaid) + amountVal;
+    const newDue = Math.max(0, selectedBooking.amount - newTotalPaid);
+    const newStatus = newDue === 0 ? "confirmed" : selectedBooking.status;
+    
+    setLocalBookings((prev) =>
+      prev.map((b) => (b.id === selectedBooking.id ? { ...b, status: newStatus, due: newDue } : b))
+    );
+    
+    setSelectedBooking((prev) =>
+      prev ? { ...prev, status: newStatus, due: newDue } : null
+    );
+    
+    setSplitAmountInput("");
+    setSplitNote("");
+    toast.success(`Recorded split payment of ₹${amountVal} via ${splitMethod}`);
+  };
 
   // Role Filtering
   const filteredData = useMemo(() => {
@@ -124,11 +267,12 @@ function BookingsPage() {
 
   // Update Status Actions
   const handleUpdateStatus = (id: string, newStatus: string) => {
+    const lowerStatus = newStatus.toLowerCase() as BookingStatus;
     setLocalBookings((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status: newStatus } : b))
+      prev.map((b) => (b.id === id ? { ...b, status: lowerStatus } : b))
     );
     if (selectedBooking && selectedBooking.id === id) {
-      setSelectedBooking((prev) => (prev ? { ...prev, status: newStatus } : null));
+      setSelectedBooking((prev) => (prev ? { ...prev, status: lowerStatus } : null));
     }
     toast.success(`Booking status updated to ${newStatus}`);
   };
@@ -152,8 +296,23 @@ function BookingsPage() {
     },
     {
       accessorKey: "amount",
-      header: "Amount",
-      cell: ({ row }) => <span>₹{row.original.amount}</span>,
+      header: "Amount / Due",
+      cell: ({ row }) => {
+        const amount = row.original.amount;
+        const splits = getSplitPayments(row.original.id, amount);
+        const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
+        const due = Math.max(0, amount - totalPaid);
+        return (
+          <div className="flex flex-col">
+            <span className="font-bold text-slate-800">₹{amount}</span>
+            {due > 0 ? (
+              <span className="text-xs font-semibold text-amber-600">Due: ₹{due}</span>
+            ) : (
+              <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Fully Paid</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: "status",
@@ -192,6 +351,16 @@ function BookingsPage() {
           role === "SUPERVISOR"
             ? "View on-ground bookings assigned for your shift today."
             : "Monitor and search booking reservations across all venues."
+        }
+        action={
+          gameRoomVenues.length > 0 && (
+            <Button
+              className="rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold"
+              onClick={() => setCustomBookingOpen(true)}
+            >
+              Add Custom Booking
+            </Button>
+          )
         }
       />
 
@@ -486,24 +655,134 @@ function BookingsPage() {
             </h3>
           </div>
 
+          {/* Split Payments Section */}
+          {selectedBooking && (() => {
+            const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount);
+            const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
+            const remainingDue = Math.max(0, selectedBooking.amount - totalPaid);
+
+            return (
+              <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-50 pb-2">
+                  <p className="text-xs text-slate-400 font-bold uppercase">Split Payment Breakdown</p>
+                  {remainingDue > 0 ? (
+                    <span className="text-[10px] font-extrabold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Partially Paid
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Fully Paid
+                    </span>
+                  )}
+                </div>
+
+                {/* Splits List */}
+                <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                  {splits.map((s, index) => (
+                    <div key={s.id || index} className="flex justify-between items-center text-xs bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-700 uppercase">{s.method}</span>
+                          {s.recordedBy && (
+                            <span className="text-[9px] text-slate-400 font-medium">by {s.recordedBy}</span>
+                          )}
+                        </div>
+                        {s.note && <p className="text-[10px] text-slate-500 italic mt-0.5">"{s.note}"</p>}
+                        {s.timestamp && <p className="text-[9px] text-slate-400 mt-0.5">{s.timestamp}</p>}
+                      </div>
+                      <span className="font-bold text-slate-800">₹{s.amount}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Balance Summary */}
+                <div className="pt-2 flex justify-between items-center text-xs font-bold border-t border-slate-100">
+                  <div className="text-slate-500">
+                    Paid: <span className="text-emerald-700">₹{totalPaid}</span>
+                  </div>
+                  <div className="text-slate-500">
+                    Remaining: <span className={remainingDue > 0 ? "text-amber-600" : "text-emerald-700"}>₹{remainingDue}</span>
+                  </div>
+                </div>
+
+                {/* Add Split Form */}
+                {remainingDue > 0 && (
+                  <form onSubmit={handleRecordSplitPayment} className="space-y-3 pt-2 border-t border-slate-50">
+                    <p className="text-[11px] text-slate-500 font-bold">Record Split Payment Part</p>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-slate-400 uppercase font-bold">Method</label>
+                        <select
+                          value={splitMethod}
+                          onChange={(e: any) => setSplitMethod(e.target.value)}
+                          className="w-full text-xs border border-slate-200 rounded-xl p-2 bg-transparent font-medium text-slate-700 outline-none"
+                        >
+                          <option value="cash">Cash</option>
+                          <option value="UPI">UPI</option>
+                          <option value="bank transfer">Bank Transfer</option>
+                          <option value="card">Card</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-slate-400 uppercase font-bold">Amount (₹)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max={remainingDue}
+                          step="any"
+                          required
+                          value={splitAmountInput}
+                          onChange={(e) => setSplitAmountInput(e.target.value)}
+                          placeholder={`Max: ${remainingDue}`}
+                          className="w-full text-xs border border-slate-200 rounded-xl p-2 font-medium text-slate-700 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold">Note / Reference (Optional)</label>
+                      <input
+                        type="text"
+                        value={splitNote}
+                        onChange={(e) => setSplitNote(e.target.value)}
+                        placeholder="e.g. Transaction ID, GPay details"
+                        className="w-full text-xs border border-slate-200 rounded-xl p-2 font-medium text-slate-700 outline-none"
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2 h-auto text-xs"
+                    >
+                      Record Payment Part
+                    </Button>
+                  </form>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Supervisor check-in checklist panel */}
           {role === "SUPERVISOR" ? (
             <div className="space-y-4 pt-2">
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
                 <p className="text-xs font-bold text-slate-500 uppercase">On-Ground Checklist</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedBooking?.status.toLowerCase() !== "completed" && (
+                  {selectedBooking!.status.toLowerCase() !== "completed" && (
                     <>
-                      {selectedBooking?.status.toLowerCase() !== "arrived" && (
+                      {selectedBooking!.status.toLowerCase() !== "arrived" && (
                         <Button
-                          onClick={() => handleUpdateStatus(selectedBooking.id, "Arrived")}
+                          onClick={() => handleUpdateStatus(selectedBooking!.id, "Arrived")}
                           className="bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs py-1.5 h-auto"
                         >
                           Mark Arrived
                         </Button>
                       )}
                       <Button
-                        onClick={() => handleUpdateStatus(selectedBooking.id, "Completed")}
+                        onClick={() => handleUpdateStatus(selectedBooking!.id, "Completed")}
                         className="bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs py-1.5 h-auto"
                       >
                         Mark Completed
@@ -511,7 +790,7 @@ function BookingsPage() {
                     </>
                   )}
                   <Button
-                    onClick={() => handleMarkNoShow(selectedBooking.id)}
+                    onClick={() => handleMarkNoShow(selectedBooking!.id)}
                     variant="outline"
                     className="rounded-xl text-xs py-1.5 h-auto text-red-600 border-red-200 hover:bg-red-50"
                   >
@@ -528,14 +807,14 @@ function BookingsPage() {
             // Full Admin Actions
             <div className="flex gap-3 pt-4">
               <Button
-                onClick={() => handleUpdateStatus(selectedBooking.id, "Confirmed")}
+                onClick={() => handleUpdateStatus(selectedBooking!.id, "Confirmed")}
                 className="flex-1 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold"
               >
                 Confirm Booking
               </Button>
               <Button
                 variant="outline"
-                onClick={() => handleUpdateStatus(selectedBooking.id, "Cancelled")}
+                onClick={() => handleUpdateStatus(selectedBooking!.id, "Cancelled")}
                 className="flex-1 rounded-xl text-red-600 border-red-100 hover:bg-red-50 font-bold"
               >
                 Cancel Slot
@@ -543,6 +822,140 @@ function BookingsPage() {
             </div>
           )}
         </div>
+      </DetailDrawer>
+
+      <DetailDrawer
+        open={customBookingOpen}
+        onOpenChange={setCustomBookingOpen}
+        title="Add Custom Booking"
+        description="Create a manual entry for Snooker Clubs / Game Rooms."
+      >
+        <form onSubmit={handleCreateCustomBooking} className="space-y-4 font-semibold text-slate-700 text-xs">
+          <div>
+            <label className="text-slate-500 font-bold">Select Game Room / Snooker Club</label>
+            <select
+              value={customVenueId}
+              onChange={(e) => setCustomVenueId(e.target.value)}
+              className="mt-2 w-full rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-800"
+              required
+            >
+              <option value="">-- Choose Venue --</option>
+              {gameRoomVenues.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name} ({v.location})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-slate-500 font-bold">Customer Name</label>
+            <Input
+              type="text"
+              value={customCustomerName}
+              onChange={(e) => setCustomCustomerName(e.target.value)}
+              placeholder="e.g. John Doe"
+              className="mt-2 rounded-xl"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="text-slate-500 font-bold">Customer Phone (Optional)</label>
+            <Input
+              type="tel"
+              value={customCustomerPhone}
+              onChange={(e) => setCustomCustomerPhone(e.target.value)}
+              placeholder="e.g. 9999999999"
+              className="mt-2 rounded-xl"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-slate-500 font-bold">Start Time</label>
+              <Input
+                type="time"
+                value={customStartTime}
+                onChange={(e) => setCustomStartTime(e.target.value)}
+                className="mt-2 rounded-xl"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-slate-500 font-bold">End Time</label>
+              <Input
+                type="time"
+                value={customEndTime}
+                onChange={(e) => setCustomEndTime(e.target.value)}
+                className="mt-2 rounded-xl"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-slate-500 font-bold">Payment Amount (₹)</label>
+              <Input
+                type="number"
+                min="0"
+                value={customAmount}
+                onChange={(e) => setCustomAmount(e.target.value)}
+                placeholder="₹ 500"
+                className="mt-2 rounded-xl"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-slate-500 font-bold">Activity / Game</label>
+              <select
+                value={customGameActivity}
+                onChange={(e) => setCustomGameActivity(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-800"
+              >
+                <option value="SNOOKER">Snooker</option>
+                <option value="POOL">Pool</option>
+                <option value="PLAYSTATION">PlayStation</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-slate-500 font-bold">Payment Method</label>
+              <select
+                value={customPaymentMethod}
+                onChange={(e) => setCustomPaymentMethod(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-slate-200 p-2.5 bg-white text-slate-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-800"
+              >
+                <option value="CASH">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="CARD">Card</option>
+                <option value="ONLINE">Online</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-slate-500 font-bold">Notes</label>
+            <textarea
+              value={customNotes}
+              onChange={(e) => setCustomNotes(e.target.value)}
+              placeholder="Add optional notes..."
+              className="mt-2 w-full min-h-[60px] rounded-xl border border-slate-200 p-2.5 text-slate-800 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-800"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold h-11"
+            disabled={isSavingCustom}
+          >
+            {isSavingCustom ? "Saving Entry..." : "Submit Entry"}
+          </Button>
+        </form>
       </DetailDrawer>
     </div>
   );
