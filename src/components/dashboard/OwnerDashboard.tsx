@@ -239,7 +239,7 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
       if (status === "cancelled") return;
 
       const amt = b.amount || b.totalAmount || 0;
-      const splits = getSplitPayments(b.id, amt);
+      const splits = getSplitPayments(b.id, amt, b);
       const paid = splits.reduce((sum, s) => sum + s.amount, 0);
 
       const dateVal = b.slotDate || b.date || b.createdAt;

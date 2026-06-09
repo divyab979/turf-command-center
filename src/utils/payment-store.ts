@@ -7,7 +7,7 @@ export interface SplitPaymentEntry {
   timestamp?: string;
 }
 
-export const getSplitPayments = (bookingId: string, totalAmount: number): SplitPaymentEntry[] => {
+export const getSplitPayments = (bookingId: string, totalAmount: number, booking?: any): SplitPaymentEntry[] => {
   if (typeof window === "undefined") return [];
   const stored = localStorage.getItem(`split_payments_${bookingId}`);
   if (stored) {
@@ -15,6 +15,49 @@ export const getSplitPayments = (bookingId: string, totalAmount: number): SplitP
       return JSON.parse(stored);
     } catch (e) {
       console.error("Failed to parse split payments", e);
+    }
+  }
+
+  // If we have the rich booking object, initialize from it
+  if (booking) {
+    const advance = booking.advancePaid ?? 0;
+    const remaining = booking.remainingAmount ?? (totalAmount - advance);
+    const status = (booking.paymentStatus || "").toUpperCase();
+    const method = (booking.paymentMethod || "").toUpperCase();
+    const cashReq = booking.cashPaymentRequested === true;
+
+    const entries: SplitPaymentEntry[] = [];
+
+    // 1. Advance Online Payment
+    if (advance > 0) {
+      entries.push({
+        id: `db-advance-${bookingId}`,
+        method: "UPI", // Online payment
+        amount: advance,
+        note: "Online Advance Payment",
+        recordedBy: "System (Online)",
+        timestamp: booking.paidAt ? new Date(booking.paidAt).toLocaleString() : new Date().toLocaleString(),
+      });
+    }
+
+    // 2. Remaining/Final Payment (if fully paid)
+    if (status === "PAID") {
+      const paidRemaining = totalAmount - advance;
+      if (paidRemaining > 0) {
+        const isCash = method === "CASH" || (cashReq === false && method !== "UPI");
+        entries.push({
+          id: `db-remaining-${bookingId}`,
+          method: isCash ? "cash" : "UPI",
+          amount: paidRemaining,
+          note: isCash ? "Remaining Balance (Cash)" : "Remaining Balance (Online)",
+          recordedBy: isCash ? "Supervisor" : "System (Online)",
+          timestamp: booking.paidAt ? new Date(booking.paidAt).toLocaleString() : new Date().toLocaleString(),
+        });
+      }
+    }
+
+    if (entries.length > 0) {
+      return entries;
     }
   }
   
@@ -107,7 +150,7 @@ export const getPaymentMethodBreakdown = (bookings: any[], allowedVenues?: strin
     }
 
     const amount = booking.amount || booking.totalAmount || 0;
-    const splits = getSplitPayments(booking.id, amount);
+    const splits = getSplitPayments(booking.id, amount, booking);
 
     splits.forEach((s) => {
       const method = s.method;
@@ -160,7 +203,7 @@ export const getMonthlyRevenueTrend = (bookings: any[], allowedVenues?: string[]
     const amount = booking.amount || booking.totalAmount || 0;
     
     // Sum split payments that are recorded
-    const splits = getSplitPayments(booking.id, amount);
+    const splits = getSplitPayments(booking.id, amount, booking);
     const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
     
     monthlyData[monthIdx].revenue += totalPaid;

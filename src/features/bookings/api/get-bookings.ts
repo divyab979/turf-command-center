@@ -48,6 +48,8 @@ export async function getBookings(): Promise<Booking[]> {
 
       remainingAmount:
         booking.remainingAmount,
+      paymentMethod:
+        booking.paymentMethod,
     })
   );
 }

@@ -57,7 +57,10 @@ export const AuthProvider = ({
     }
 
     if (error) {
-      logout();
+      const isUnauthorized = (error as any).response?.status === 401 || (error as any).response?.status === 403;
+      if (isUnauthorized) {
+        logout();
+      }
     }
   }, [
     data,

@@ -15,4 +15,5 @@ export interface Booking {
   paymentStatus?: string;
   advancePaid?: number;
   remainingAmount?: number;
+  paymentMethod?: string;
 }

@@ -174,7 +174,7 @@ function BookingsPage() {
       setLocalBookings(
         bookingsData.map((b, idx) => {
           const venue = b.venue && b.venue !== "Unknown Venue" ? b.venue : (idx % 3 === 0 ? "Arena Turf" : idx % 3 === 1 ? "Goal Sports" : "Wembley Turf");
-          const splits = getSplitPayments(b.id, b.amount);
+          const splits = getSplitPayments(b.id, b.amount, b);
           const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
           const due = Math.max(0, b.amount - totalPaid);
           return {
@@ -205,7 +205,7 @@ function BookingsPage() {
       return;
     }
     
-    const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount);
+    const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount, selectedBooking);
     const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
     const due = Math.max(0, selectedBooking.amount - totalPaid);
     
@@ -299,17 +299,45 @@ function BookingsPage() {
       header: "Amount / Due",
       cell: ({ row }) => {
         const amount = row.original.amount;
-        const splits = getSplitPayments(row.original.id, amount);
-        const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
+        const splits = getSplitPayments(row.original.id, amount, row.original);
+        
+        let cashPaid = 0;
+        let onlinePaid = 0;
+        splits.forEach((s) => {
+          const m = s.method.toLowerCase();
+          if (m === "cash") {
+            cashPaid += s.amount;
+          } else {
+            onlinePaid += s.amount;
+          }
+        });
+        
+        const totalPaid = cashPaid + onlinePaid;
         const due = Math.max(0, amount - totalPaid);
+        
         return (
-          <div className="flex flex-col">
-            <span className="font-bold text-slate-800">₹{amount}</span>
-            {due > 0 ? (
-              <span className="text-xs font-semibold text-amber-600">Due: ₹{due}</span>
-            ) : (
-              <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Fully Paid</span>
-            )}
+          <div className="flex flex-col gap-0.5 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-slate-800">₹{amount}</span>
+              {due === 0 ? (
+                <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Paid</span>
+              ) : (
+                <span className="text-[9px] font-extrabold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md uppercase tracking-wider">Partial</span>
+              )}
+            </div>
+            
+            {/* Payment breakdown */}
+            <div className="flex flex-col text-[10px] text-slate-500 font-semibold gap-0.5 mt-0.5">
+              {onlinePaid > 0 && (
+                <span className="text-emerald-700">₹{onlinePaid} Online</span>
+              )}
+              {cashPaid > 0 && (
+                <span className="text-indigo-600">₹{cashPaid} Cash</span>
+              )}
+              {due > 0 && (
+                <span className="text-amber-600">₹{due} Due</span>
+              )}
+            </div>
           </div>
         );
       },
@@ -657,7 +685,7 @@ function BookingsPage() {
 
           {/* Split Payments Section */}
           {selectedBooking && (() => {
-            const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount);
+            const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount, selectedBooking);
             const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
             const remainingDue = Math.max(0, selectedBooking.amount - totalPaid);
 
