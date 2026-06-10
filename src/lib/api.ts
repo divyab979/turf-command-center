@@ -6,7 +6,7 @@ const isLocalhost =
    window.location.hostname === "127.0.0.1" || 
    window.location.hostname.startsWith("192.168."));
 export const api = axios.create({
-  baseURL: "http://15.206.136.241:4000",
+  baseURL: "https://api.gameup11.com",
 });
 
 api.interceptors.request.use((config) => {
