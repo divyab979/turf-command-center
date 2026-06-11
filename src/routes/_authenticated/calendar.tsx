@@ -43,9 +43,12 @@ function CalendarPage() {
   const { data: venues = [] } = useVenues();
 
   useEffect(() => {
-    if (!activeVenueId && venues.length) {
-      setActiveVenueId(venues[0].id);
-      localStorage.setItem("selectedVenueId", venues[0].id);
+    if (venues.length) {
+      const exists = venues.some((v: any) => v.id === activeVenueId);
+      if (!exists) {
+        setActiveVenueId(venues[0].id);
+        localStorage.setItem("selectedVenueId", venues[0].id);
+      }
     }
   }, [venues, activeVenueId]);
 

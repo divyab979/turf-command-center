@@ -95,12 +95,25 @@ export const CreateVenueForm = ({ venueId, onSuccess }: Props) => {
     setPhotos((prev) => prev.filter((p) => p !== url));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setPhotos((prev) => [...prev, url]);
-      toast.success("Photo selected");
+      const toastId = toast.loading("Uploading photo...");
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await api.post("/venues/upload-image", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+        const imageUrl = res.data.url;
+        setPhotos((prev) => [...prev, imageUrl]);
+        toast.success("Photo uploaded successfully", { id: toastId });
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to upload photo", { id: toastId });
+      }
     }
   };
 

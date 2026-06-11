@@ -77,89 +77,73 @@ export function SuperAdminDashboard({ view = "dashboard" }: Props) {
   }, []);
 
   useEffect(() => {
-    if (dbOwners.length > 0) {
-      setOwners(
-        dbOwners.map((o: any) => ({
-          id: o.id,
-          name: o.name,
-          email: o.email,
-          phone: "+91 99999 99999",
-          venueCount: o.ownedVenues?.length || 0,
-          kyc: "Verified",
-          status: "Active",
-          joined: "Joined Today",
-        }))
-      );
-    }
+    setOwners(
+      dbOwners.map((o: any) => ({
+        id: o.id,
+        name: o.name,
+        email: o.email,
+        phone: o.phone || "+91 99999 99999",
+        venueCount: o.ownedVenues?.length || 0,
+        kyc: "Verified",
+        status: o.status || "Active",
+        joined: o.createdAt ? new Date(o.createdAt).toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric" }) : "Joined Today",
+      }))
+    );
   }, [dbOwners]);
 
   useEffect(() => {
-    if (rawBookings.length > 0) {
-      const customerMap = new Map<string, any>();
-      rawBookings.forEach((b) => {
-        const key = b.userId || b.customerName || "Unknown";
-        const name = b.customerName || b.user?.name || "Walk-in Customer";
-        const email = b.user?.email || `${name.toLowerCase().replace(/\s+/g, "")}@example.com`;
-        const phone = b.customerPhone || b.user?.phone || "+91 99999 99999";
-        const amount = b.totalAmount || 0;
-        const sport = b.turf?.sport || "Football";
+    const customerMap = new Map<string, any>();
+    rawBookings.forEach((b) => {
+      const key = b.userId || b.customerName || "Unknown";
+      const name = b.customerName || b.user?.name || "Walk-in Customer";
+      const email = b.user?.email || `${name.toLowerCase().replace(/\s+/g, "")}@example.com`;
+      const phone = b.customerPhone || b.user?.phone || "+91 99999 99999";
+      const amount = b.totalAmount || 0;
+      const sport = b.turf?.sport || "Football";
 
-        if (!customerMap.has(key)) {
-          customerMap.set(key, {
-            id: key.startsWith("usr_") || key.length > 10 ? `CUST-${key.slice(-4).toUpperCase()}` : `CUST-${key}`,
-            name,
-            email,
-            phone,
-            bookings: 0,
-            totalSpent: 0,
-            preference: sport,
-            status: "Active",
-          });
-        }
+      if (!customerMap.has(key)) {
+        customerMap.set(key, {
+          id: key.startsWith("usr_") || key.length > 10 ? `CUST-${key.slice(-4).toUpperCase()}` : `CUST-${key}`,
+          name,
+          email,
+          phone,
+          bookings: 0,
+          totalSpent: 0,
+          preference: sport,
+          status: "Active",
+        });
+      }
 
-        const existing = customerMap.get(key);
-        existing.bookings += 1;
-        existing.totalSpent += amount;
-        if (b.turf?.sport) {
-          existing.preference = b.turf.sport;
-        }
-      });
+      const existing = customerMap.get(key);
+      existing.bookings += 1;
+      existing.totalSpent += amount;
+      if (b.turf?.sport) {
+        existing.preference = b.turf.sport;
+      }
+    });
 
-      setCustomers(Array.from(customerMap.values()));
-    }
+    setCustomers(Array.from(customerMap.values()));
   }, [rawBookings]);
 
   const totalPlatformRevenue = useMemo(() => {
-    if (dbBookings.length === 0) return 842000;
     return dbBookings.reduce((sum, b) => sum + (b.amount || 0), 0);
   }, [dbBookings]);
 
   const totalBookingsCount = useMemo(() => {
-    if (dbBookings.length === 0) return 220;
     return dbBookings.length;
   }, [dbBookings]);
 
   const activeVenuesCount = useMemo(() => {
-    if (dbVenues.length === 0) return 28;
     return dbVenues.length;
   }, [dbVenues]);
 
   const registeredCustomersCount = useMemo(() => {
-    if (dbBookings.length === 0) return 4820;
     const unique = new Set(dbBookings.map(b => b.customer));
     return unique.size;
   }, [dbBookings]);
 
   const dynamicStats = useMemo(() => {
-    const bookingsList = dbBookings.length > 0 ? dbBookings : [
-      { id: "BK-1024", amount: 15000, date: "May 12", status: "confirmed" },
-      { id: "BK-1025", amount: 26000, date: "May 13", status: "confirmed" },
-      { id: "BK-1026", amount: 24000, date: "May 14", status: "confirmed" },
-      { id: "BK-1027", amount: 32000, date: "May 15", status: "confirmed" },
-      { id: "BK-1028", amount: 38000, date: "May 16", status: "confirmed" },
-      { id: "BK-1029", amount: 45000, date: "May 17", status: "confirmed" },
-      { id: "BK-1030", amount: 35000, date: "May 18", status: "confirmed" },
-    ];
+    const bookingsList = dbBookings;
 
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
@@ -219,112 +203,10 @@ export function SuperAdminDashboard({ view = "dashboard" }: Props) {
     };
   }, [dbBookings]);
 
-  // --- MOCK STATES ---
-  const [owners, setOwners] = useState([
-    {
-      id: "OWN-101",
-      name: "Vikram Malhotra",
-      email: "vikram@playarena.com",
-      phone: "+91 98765 43210",
-      venueCount: 3,
-      kyc: "Verified",
-      status: "Active",
-      joined: "12 Jan 2026",
-    },
-    {
-      id: "OWN-102",
-      name: "Ananya Deshmukh",
-      email: "ananya@goalsports.com",
-      phone: "+91 87654 32109",
-      venueCount: 1,
-      kyc: "Pending",
-      status: "Active",
-      joined: "03 Feb 2026",
-    },
-    {
-      id: "OWN-103",
-      name: "Sandeep Gill",
-      email: "sandeep@wembleyturf.in",
-      phone: "+91 76543 21098",
-      venueCount: 2,
-      kyc: "Verified",
-      status: "Suspended",
-      joined: "18 Mar 2026",
-    },
-  ]);
-
-  const [customers, setCustomers] = useState([
-    {
-      id: "CUST-901",
-      name: "Rohit Verma",
-      email: "rohit.verma@gmail.com",
-      phone: "+91 99887 76655",
-      bookings: 24,
-      totalSpent: 28800,
-      preference: "Football",
-      status: "Active",
-    },
-    {
-      id: "CUST-902",
-      name: "Sneha Nair",
-      email: "sneha.nair@outlook.com",
-      phone: "+91 98877 66554",
-      bookings: 18,
-      totalSpent: 21600,
-      preference: "Badminton",
-      status: "Active",
-    },
-    {
-      id: "CUST-903",
-      name: "Arjun Mehta",
-      email: "arjun.m@yahoo.com",
-      phone: "+91 97766 55443",
-      bookings: 4,
-      totalSpent: 4800,
-      preference: "Cricket",
-      status: "Flagged",
-    },
-    {
-      id: "CUST-904",
-      name: "Kabir Roy",
-      email: "kabir.roy@gmail.com",
-      phone: "+91 96655 44332",
-      bookings: 32,
-      totalSpent: 41600,
-      preference: "Football",
-      status: "Blocked",
-    },
-  ]);
-
-  const [settlements, setSettlements] = useState([
-    {
-      id: "SET-401",
-      owner: "Vikram Malhotra",
-      venue: "Arena Turf",
-      grossRevenue: 120000,
-      commission: 12000,
-      payout: 108000,
-      status: "Pending Approval",
-    },
-    {
-      id: "SET-402",
-      owner: "Ananya Deshmukh",
-      venue: "Goal Sports",
-      grossRevenue: 85000,
-      commission: 8500,
-      payout: 76500,
-      status: "Processed",
-    },
-    {
-      id: "SET-403",
-      owner: "Sandeep Gill",
-      venue: "Wembley Turf",
-      grossRevenue: 45000,
-      commission: 4500,
-      payout: 40500,
-      status: "Pending Payout",
-    },
-  ]);
+  // --- MOCK STATES REMOVED ---
+  const [owners, setOwners] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [settlements, setSettlements] = useState<any[]>([]);
 
   const [commissionRate, setCommissionRate] = useState(10);
   const [refundPolicy, setRefundPolicy] = useState("flexible");
@@ -345,61 +227,116 @@ export function SuperAdminDashboard({ view = "dashboard" }: Props) {
     status: "Active",
   });
 
-  // Chart Mock Data
-  const bookingTrend = [
-    { date: "May 12", bookings: 120, revenue: 145000 },
-    { date: "May 13", bookings: 145, revenue: 168000 },
-    { date: "May 14", bookings: 130, revenue: 155000 },
-    { date: "May 15", bookings: 185, revenue: 220000 },
-    { date: "May 16", bookings: 210, revenue: 260000 },
-    { date: "May 17", bookings: 245, revenue: 310000 },
-    { date: "May 18", bookings: 220, revenue: 285000 },
-  ];
+  // Dynamic Chart & Metric Calculations
+  const bookingTrend = useMemo(() => {
+    if (rawBookings.length === 0) return [];
+    const groups: Record<string, { bookings: number; revenue: number }> = {};
+    rawBookings.forEach((b) => {
+      const dateVal = b.bookingDate || b.createdAt;
+      if (!dateVal) return;
+      const formattedDate = new Date(dateVal).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+      if (!groups[formattedDate]) {
+        groups[formattedDate] = { bookings: 0, revenue: 0 };
+      }
+      groups[formattedDate].bookings += 1;
+      groups[formattedDate].revenue += b.totalAmount || 0;
+    });
+    return Object.entries(groups)
+      .map(([date, data]) => ({
+        date,
+        bookings: data.bookings,
+        revenue: data.revenue,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [rawBookings]);
 
-  const occupancyByVenue = [
-    { name: "Arena Turf", occupancy: 82 },
-    { name: "Goal Sports", occupancy: 74 },
-    { name: "Wembley Turf", occupancy: 63 },
-    { name: "Smash Arena", occupancy: 58 },
-  ];
+  const occupancyByVenue = useMemo(() => {
+    if (rawBookings.length === 0 || dbVenues.length === 0) return [];
+    const bookingsCountByVenue: Record<string, number> = {};
+    rawBookings.forEach((b) => {
+      const venueName = b.venue?.name || "Unknown";
+      bookingsCountByVenue[venueName] = (bookingsCountByVenue[venueName] || 0) + 1;
+    });
 
-  const sportSplit = [
-    { name: "Football", value: 55, color: "#14532D" },
-    { name: "Cricket", value: 25, color: "#16A34A" },
-    { name: "Badminton", value: 12, color: "#4ADE80" },
-    { name: "Tennis", value: 8, color: "#86EFAC" },
-  ];
+    return dbVenues.map((v) => {
+      const name = v.name;
+      const count = bookingsCountByVenue[name] || 0;
+      const occupancy = Math.min(count * 15, 100);
+      return {
+        name,
+        occupancy: count > 0 ? occupancy || 10 : 0,
+      };
+    });
+  }, [rawBookings, dbVenues]);
 
-  const paymentModes = [
-    { name: "UPI", value: 65, color: "#059669" },
-    { name: "Cash", value: 20, color: "#D97706" },
-    { name: "Cards", value: 10, color: "#2563EB" },
-    { name: "Split Mode", value: 5, color: "#7C3AED" },
-  ];
+  const sportSplit = useMemo(() => {
+    if (rawBookings.length === 0) return [];
+    const counts: Record<string, number> = {};
+    rawBookings.forEach((b) => {
+      const sport = b.turf?.sport || b.venue?.sport || "Other";
+      counts[sport] = (counts[sport] || 0) + 1;
+    });
 
-  const [alerts, setAlerts] = useState([
-    {
-      id: 1,
-      venue: "Arena Turf",
-      message: "Double booking slot conflict at Football pitch A (7PM-8PM)",
-      time: "10 mins ago",
-      type: "conflict",
-    },
-    {
-      id: 2,
-      venue: "Wembley Turf",
-      message: "Refund requested for BK-8821 (Customer cancelled)",
-      time: "1 hour ago",
-      type: "refund",
-    },
-    {
-      id: 3,
-      venue: "Goal Sports",
-      message: "Owner KYC document uploaded for approval",
-      time: "2 hours ago",
-      type: "kyc",
-    },
-  ]);
+    const colors = ["#14532D", "#16A34A", "#4ADE80", "#86EFAC", "#A7F3D0"];
+    return Object.entries(counts).map(([name, value], index) => ({
+      name,
+      value,
+      color: colors[index % colors.length],
+    }));
+  }, [rawBookings]);
+
+  const paymentModes = useMemo(() => {
+    if (rawBookings.length === 0) return [];
+    const counts: Record<string, number> = {};
+    rawBookings.forEach((b) => {
+      const mode = b.paymentMethod || "UPI";
+      counts[mode] = (counts[mode] || 0) + 1;
+    });
+    const colors = ["#059669", "#D97706", "#2563EB", "#7C3AED"];
+    return Object.entries(counts).map(([name, value], index) => ({
+      name,
+      value,
+      color: colors[index % colors.length],
+    }));
+  }, [rawBookings]);
+
+  const [alerts, setAlerts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const list: any[] = [];
+    let idCounter = 1;
+
+    // Check for pending cash payments
+    rawBookings.forEach((b) => {
+      if (b.cashPaymentRequested && b.paymentStatus?.toLowerCase() === "pending") {
+        list.push({
+          id: idCounter++,
+          venue: b.venue?.name || "Venue",
+          message: `Cash payment approval requested for BK-${b.id?.slice(-4).toUpperCase() || b.id} (Customer: ${b.customerName || b.user?.name || "Guest"})`,
+          time: "Action Required",
+          type: "conflict",
+        });
+      }
+    });
+
+    // Check for pending KYC owners
+    dbOwners.forEach((owner) => {
+      if (owner.kyc?.toLowerCase() === "pending" || !owner.kyc) {
+        list.push({
+          id: idCounter++,
+          venue: owner.name,
+          message: `Owner KYC verification pending for ${owner.name}`,
+          time: "KYC Pending",
+          type: "kyc",
+        });
+      }
+    });
+
+    setAlerts(list);
+  }, [rawBookings, dbOwners]);
 
   // Handlers
   const handleToggleOwnerStatus = (id: string) => {

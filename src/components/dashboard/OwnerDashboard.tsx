@@ -43,81 +43,33 @@ interface Props {
 }
 
 export function OwnerDashboard({ view = "dashboard" }: Props) {
-  // --- MOCK STATES ---
+  // --- MOCK STATES REMOVED ---
+  const [tournaments, setTournaments] = useState<any[]>(() => {
+    const stored = localStorage.getItem("owner_tournaments");
+    return stored ? JSON.parse(stored) : [];
+  });
 
-  // Tournaments
-  const [tournaments, setTournaments] = useState([
-    {
-      id: "TRN-501",
-      title: "Inter-Corporate Cup 2026",
-      organizer: "HDFC Club",
-      phone: "+91 99887 76655",
-      turfs: "Football Pitch A & B",
-      packagePrice: 35000,
-      advance: 15000,
-      dues: 20000,
-      status: "Active",
-      dates: "May 20 - May 22",
-    },
-    {
-      id: "TRN-502",
-      title: "Monsoon Cricket League",
-      organizer: "Red Bull Sports",
-      phone: "+91 88776 65544",
-      turfs: "Cricket Ground A",
-      packagePrice: 60000,
-      advance: 40000,
-      dues: 20000,
-      status: "Upcoming",
-      dates: "Jun 05 - Jun 10",
-    },
-  ]);
+  const [guestBookings, setGuestBookings] = useState<any[]>(() => {
+    const stored = localStorage.getItem("owner_guest_bookings");
+    return stored ? JSON.parse(stored) : [];
+  });
 
-  // Guest walk-ins
-  const [guestBookings, setGuestBookings] = useState([
-    {
-      id: "GST-701",
-      name: "Siddharth Goel",
-      phone: "+91 95544 33221",
-      turf: "Football Pitch A",
-      slot: "06:00 PM - 07:00 PM",
-      amount: 1500,
-      paymentMode: "UPI (GPay)",
-      date: "Today",
-    },
-    {
-      id: "GST-702",
-      name: "Amit Rawat",
-      phone: "+91 94433 22110",
-      turf: "Badminton Court 1",
-      slot: "08:00 PM - 09:00 PM",
-      amount: 600,
-      paymentMode: "Cash",
-      date: "Today",
-    },
-  ]);
+  const [maintenance, setMaintenance] = useState<any[]>(() => {
+    const stored = localStorage.getItem("owner_maintenance");
+    return stored ? JSON.parse(stored) : [];
+  });
 
-  // Maintenance issues
-  const [maintenance, setMaintenance] = useState([
-    {
-      id: "MNT-201",
-      turf: "Football Pitch B",
-      issue: "Torn turf net at the north goalpost",
-      severity: "Urgent",
-      date: "17 May 2026",
-      supervisor: "Ramesh Kumar",
-      status: "In Progress",
-    },
-    {
-      id: "MNT-202",
-      turf: "Cricket Ground A",
-      issue: "Pitch roller maintenance and grass trim",
-      severity: "Low",
-      date: "19 May 2026",
-      supervisor: "Sunil Dutt",
-      status: "Logged",
-    },
-  ]);
+  useEffect(() => {
+    localStorage.setItem("owner_tournaments", JSON.stringify(tournaments));
+  }, [tournaments]);
+
+  useEffect(() => {
+    localStorage.setItem("owner_guest_bookings", JSON.stringify(guestBookings));
+  }, [guestBookings]);
+
+  useEffect(() => {
+    localStorage.setItem("owner_maintenance", JSON.stringify(maintenance));
+  }, [maintenance]);
 
   // Venue & Staff dynamic databases
   const [dbVenues, setDbVenues] = useState<any[]>([]);
@@ -170,39 +122,37 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
   }, []);
 
   useEffect(() => {
-    if (dbBookings.length > 0) {
-      const customerMap = new Map<string, any>();
-      dbBookings.forEach((b) => {
-        const key = b.userId || b.customerName || "Unknown";
-        const name = b.customerName || b.user?.name || "Walk-in Customer";
-        const email = b.user?.email || `${name.toLowerCase().replace(/\s+/g, "")}@example.com`;
-        const phone = b.customerPhone || b.user?.phone || "+91 99999 99999";
-        const amount = b.totalAmount || 0;
-        const sport = b.turf?.sport || "Football";
+    const customerMap = new Map<string, any>();
+    dbBookings.forEach((b) => {
+      const key = b.userId || b.customerName || "Unknown";
+      const name = b.customerName || b.user?.name || "Walk-in Customer";
+      const email = b.user?.email || `${name.toLowerCase().replace(/\s+/g, "")}@example.com`;
+      const phone = b.customerPhone || b.user?.phone || "+91 99999 99999";
+      const amount = b.totalAmount || 0;
+      const sport = b.turf?.sport || "Football";
 
-        if (!customerMap.has(key)) {
-          customerMap.set(key, {
-            id: key.startsWith("usr_") || key.length > 10 ? `CUST-${key.slice(-4).toUpperCase()}` : `CUST-${key}`,
-            name,
-            email,
-            phone,
-            bookings: 0,
-            totalSpent: 0,
-            preference: sport,
-            status: "Active",
-          });
-        }
+      if (!customerMap.has(key)) {
+        customerMap.set(key, {
+          id: key.startsWith("usr_") || key.length > 10 ? `CUST-${key.slice(-4).toUpperCase()}` : `CUST-${key}`,
+          name,
+          email,
+          phone,
+          bookings: 0,
+          totalSpent: 0,
+          preference: sport,
+          status: "Active",
+        });
+      }
 
-        const existing = customerMap.get(key);
-        existing.bookings += 1;
-        existing.totalSpent += amount;
-        if (b.turf?.sport) {
-          existing.preference = b.turf.sport;
-        }
-      });
+      const existing = customerMap.get(key);
+      existing.bookings += 1;
+      existing.totalSpent += amount;
+      if (b.turf?.sport) {
+        existing.preference = b.turf.sport;
+      }
+    });
 
-      setCustomers(Array.from(customerMap.values()));
-    }
+    setCustomers(Array.from(customerMap.values()));
   }, [dbBookings]);
 
   const supervisors = useMemo(() => {
@@ -210,7 +160,7 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
       id: s.id,
       name: s.name,
       email: s.email,
-      phone: "+91 93322 11009",
+      phone: s.phone || "+91 93322 11009",
       assignedVenue: s.venue?.name || "No Venue Assigned",
       dailyCollection: 0,
       status: "Active",
@@ -218,15 +168,7 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
   }, [dbStaff]);
 
   const dynamicStats = useMemo(() => {
-    const bookingsList = dbBookings.length > 0 ? dbBookings : [
-      { id: "BK-1024", amount: 15000, date: "May 12", status: "confirmed" },
-      { id: "BK-1025", amount: 26000, date: "May 13", status: "confirmed" },
-      { id: "BK-1026", amount: 24000, date: "May 14", status: "confirmed" },
-      { id: "BK-1027", amount: 32000, date: "May 15", status: "confirmed" },
-      { id: "BK-1028", amount: 38000, date: "May 16", status: "confirmed" },
-      { id: "BK-1029", amount: 45000, date: "May 17", status: "confirmed" },
-      { id: "BK-1030", amount: 35000, date: "May 18", status: "confirmed" },
-    ];
+    const bookingsList = dbBookings;
 
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
@@ -318,66 +260,36 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
   };
 
   // CRM database
-  const [customers, setCustomers] = useState([
-    {
-      id: "OWN-C-01",
-      name: "Karan Johar",
-      phone: "+91 98989 89898",
-      bookings: 18,
-      totalSpent: 21600,
-      preference: "Football Pitch A",
-      status: "VIP",
-    },
-    {
-      id: "OWN-C-02",
-      name: "Rohan Kapoor",
-      phone: "+91 97979 79797",
-      bookings: 12,
-      totalSpent: 14400,
-      preference: "Football Pitch B",
-      status: "Regular",
-    },
-    {
-      id: "OWN-C-03",
-      name: "Prerna Roy",
-      phone: "+91 96969 69696",
-      bookings: 22,
-      totalSpent: 13200,
-      preference: "Badminton Court 1",
-      status: "VIP",
-    },
-  ]);
+  const [customers, setCustomers] = useState<any[]>([]);
 
   // Payments Ledger
-  const [payments, setPayments] = useState([
-    {
-      id: "PAY-110",
-      customer: "Karan Johar",
-      amount: 1500,
-      due: 0,
-      method: "UPI (GPay)",
-      status: "Fully Paid",
-      date: "Today, 4:10 PM",
-    },
-    {
-      id: "PAY-111",
-      customer: "HDFC Club Tournament",
-      amount: 35000,
-      due: 20000,
-      method: "Split Mode",
-      status: "Partially Paid",
-      date: "Today, 2:30 PM",
-    },
-    {
-      id: "PAY-112",
-      customer: "Rohan Kapoor",
-      amount: 1500,
-      due: 1500,
-      method: "Pending",
-      status: "Unpaid",
-      date: "Today, 1:15 PM",
-    },
-  ]);
+  const [payments, setPayments] = useState<any[]>([]);
+
+  useEffect(() => {
+    const list = dbBookings.map((b: any, index: number) => {
+      const amount = b.amount || 0;
+      const remaining = b.remainingAmount !== undefined ? b.remainingAmount : (amount - (b.advancePaid || 0));
+      const isPaid = b.paymentStatus?.toLowerCase() === "paid" || remaining === 0;
+      
+      let status = "Unpaid";
+      if (isPaid) {
+        status = "Fully Paid";
+      } else if ((b.advancePaid || 0) > 0) {
+        status = "Partially Paid";
+      }
+
+      return {
+        id: b.id ? `PAY-${b.id.slice(-4).toUpperCase()}` : `PAY-${100 + index}`,
+        customer: b.customer || "Walk-in Customer",
+        amount: amount,
+        due: isPaid ? 0 : remaining,
+        method: b.paymentMethod || "UPI",
+        status: status,
+        date: b.slot ? b.slot.split("•")[0].trim() : "Today",
+      };
+    });
+    setPayments(list);
+  }, [dbBookings]);
 
   // Form states
   const [searchQuery, setSearchQuery] = useState("");
@@ -417,30 +329,93 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
     venueId: "",
   });
 
-  // Chart data
-  const revenueTrend = [
-    { date: "May 12", revenue: 22000 },
-    { date: "May 13", revenue: 26000 },
-    { date: "May 14", revenue: 24000 },
-    { date: "May 15", revenue: 32000 },
-    { date: "May 16", revenue: 38000 },
-    { date: "May 17", revenue: 45000 },
-    { date: "May 18", revenue: 35000 },
-  ];
+  // Dynamic Chart & Performance Calculations
+  const revenueTrend = useMemo(() => {
+    if (dbBookings.length === 0) return [];
+    const groups: Record<string, number> = {};
+    dbBookings.forEach((b) => {
+      const dateVal = b.slotDate || b.date || b.createdAt;
+      if (!dateVal) return;
+      const formattedDate = new Date(dateVal).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+      groups[formattedDate] = (groups[formattedDate] || 0) + (b.amount || 0);
+    });
+    return Object.entries(groups).map(([date, revenue]) => ({
+      date,
+      revenue,
+    })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [dbBookings]);
 
-  const turfPerformance = [
-    { name: "Football Pitch A", bookings: 42, revenue: 50400, color: "#14532D" },
-    { name: "Football Pitch B", bookings: 35, revenue: 42000, color: "#16A34A" },
-    { name: "Cricket Ground A", bookings: 24, revenue: 36000, color: "#22C55E" },
-    { name: "Badminton Court 1", bookings: 56, revenue: 33600, color: "#86EFAC" },
-  ];
+  const turfPerformance = useMemo(() => {
+    if (dbBookings.length === 0) return [];
+    const performanceMap: Record<string, { bookings: number; revenue: number }> = {};
+    dbBookings.forEach((b) => {
+      const turfName = b.venue || "Unknown Venue";
+      if (!performanceMap[turfName]) {
+        performanceMap[turfName] = { bookings: 0, revenue: 0 };
+      }
+      performanceMap[turfName].bookings += 1;
+      performanceMap[turfName].revenue += b.amount || 0;
+    });
 
-  const peakSlots = [
-    { slot: "6 AM - 8 AM", occupancy: 45 },
-    { slot: "4 PM - 6 PM", occupancy: 70 },
-    { slot: "6 PM - 8 PM", occupancy: 95 },
-    { slot: "8 PM - 10 PM", occupancy: 90 },
-  ];
+    const colors = ["#14532D", "#16A34A", "#22C55E", "#86EFAC", "#A7F3D0"];
+    return Object.entries(performanceMap).map(([name, data], index) => ({
+      name,
+      bookings: data.bookings,
+      revenue: data.revenue,
+      color: colors[index % colors.length],
+    }));
+  }, [dbBookings]);
+
+  const peakSlots = useMemo(() => {
+    if (dbBookings.length === 0) return [];
+    const buckets = [
+      { slot: "6 AM - 8 AM", hours: [6, 7], count: 0 },
+      { slot: "8 AM - 12 PM", hours: [8, 9, 10, 11], count: 0 },
+      { slot: "12 PM - 4 PM", hours: [12, 13, 14, 15], count: 0 },
+      { slot: "4 PM - 6 PM", hours: [16, 17], count: 0 },
+      { slot: "6 PM - 8 PM", hours: [18, 19], count: 0 },
+      { slot: "8 PM - 10 PM", hours: [20, 21], count: 0 },
+      { slot: "10 PM - 12 AM", hours: [22, 23], count: 0 },
+    ];
+
+    dbBookings.forEach((b) => {
+      const slotStr = (b.slot || "").toLowerCase();
+      let hour = -1;
+      const timeMatch = slotStr.match(/(\d+):(\d+)\s*(pm|am)?/i) || slotStr.match(/(\d+)\s*(pm|am)/i);
+      if (timeMatch) {
+        let h = parseInt(timeMatch[1], 10);
+        const isPM = slotStr.includes("pm") || (timeMatch[3] && timeMatch[3].toLowerCase() === "pm");
+        const isAM = slotStr.includes("am") || (timeMatch[3] && timeMatch[3].toLowerCase() === "am");
+        if (isPM && h < 12) h += 12;
+        if (isAM && h === 12) h = 0;
+        hour = h;
+      } else {
+        const numberMatches = slotStr.match(/\d+/g);
+        if (numberMatches && numberMatches.length > 0) {
+          hour = parseInt(numberMatches[0], 10);
+          if (slotStr.includes("pm") && hour < 12) hour += 12;
+        }
+      }
+
+      if (hour !== -1) {
+        const bucket = buckets.find((bucket) => bucket.hours.includes(hour));
+        if (bucket) {
+          bucket.count += 1;
+        }
+      }
+    });
+
+    const maxCount = Math.max(...buckets.map((b) => b.count));
+    return buckets
+      .map((b) => ({
+        slot: b.slot,
+        occupancy: maxCount > 0 ? Math.round((b.count / maxCount) * 100) : 0,
+      }))
+      .filter((b) => b.occupancy > 0);
+  }, [dbBookings]);
 
   // Action handlers
   const handleToggleSupervisor = async (id: string) => {

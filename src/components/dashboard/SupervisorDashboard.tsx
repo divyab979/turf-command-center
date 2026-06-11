@@ -47,119 +47,93 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
     fetchBookings();
   }, []);
 
-  const [mockBookings, setMockBookings] = useState([
-    {
-      id: "BK-8001",
-      customer: "Aayush Saxena",
-      phone: "+91 99887 76655",
-      turf: "Football Pitch A",
-      slot: "05:00 PM - 06:00 PM",
-      sport: "Football",
-      amount: 1500,
-      due: 500,
-      status: "Arrived",
-      date: "Today",
-    },
-    {
-      id: "BK-8002",
-      customer: "Sameer Phadke",
-      phone: "+91 88776 65544",
-      turf: "Football Pitch B",
-      slot: "06:00 PM - 07:00 PM",
-      sport: "Football",
-      amount: 1500,
-      due: 0,
-      status: "Confirmed",
-      date: "Today",
-    },
-    {
-      id: "BK-8003",
-      customer: "Divya Balan",
-      phone: "+91 77665 54433",
-      turf: "Cricket Ground A",
-      slot: "07:00 PM - 08:00 PM",
-      sport: "Cricket",
-      amount: 2000,
-      due: 2000,
-      status: "Confirmed",
-      date: "Today",
-    },
-    {
-      id: "BK-8004",
-      customer: "Preeti Singh",
-      phone: "+91 66554 43322",
-      turf: "Badminton Court 1",
-      slot: "04:00 PM - 05:00 PM",
-      sport: "Badminton",
-      amount: 600,
-      due: 0,
-      status: "Completed",
-      date: "Today",
-    },
-  ]);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [localPaymentsTotal, setLocalPaymentsTotal] = useState({ cash: 0, upi: 0 });
 
-  const bookings = useMemo(() => {
-    if (dbBookings.length === 0) {
-      return mockBookings;
-    }
-    return dbBookings.map((b: any) => {
-      let mappedStatus = "Confirmed";
-      if (b.status === "completed" || b.status === "paid") {
-        mappedStatus = "Completed";
-      } else if (b.status === "arrived") {
-        mappedStatus = "Arrived";
-      } else if (b.status === "no_show") {
-        mappedStatus = "No Show";
-      }
-      return {
-        id: b.id,
-        customer: b.customer,
-        phone: "+91 99887 76655",
-        turf: b.venue || "Football Pitch A",
-        slot: b.slot || "05:00 PM - 06:00 PM",
-        sport: "Football",
-        amount: b.amount || 1500,
-        due: mappedStatus === "Completed" ? 0 : (b.amount || 1500),
-        status: mappedStatus,
-        date: "Today",
-      };
-    });
-  }, [dbBookings, mockBookings]);
-
-  const setBookings = (val: any) => {
-    if (typeof val === "function") {
-      setMockBookings((prev) => val(prev));
+  useEffect(() => {
+    if (dbBookings && dbBookings.length > 0) {
+      setBookings(dbBookings.map((b: any) => {
+        let mappedStatus = "Confirmed";
+        if (b.status === "completed" || b.status === "paid") {
+          mappedStatus = "Completed";
+        } else if (b.status === "arrived") {
+          mappedStatus = "Arrived";
+        } else if (b.status === "no_show") {
+          mappedStatus = "No Show";
+        }
+        return {
+          id: b.id,
+          customer: b.customer,
+          phone: b.phone || "+91 99887 76655",
+          turf: b.venue || "Football Pitch A",
+          slot: b.slot || "05:00 PM - 06:00 PM",
+          sport: b.sport || "Football",
+          amount: b.amount || 1500,
+          due: mappedStatus === "Completed" ? 0 : (b.remainingAmount !== undefined ? b.remainingAmount : (b.amount || 1500)),
+          status: mappedStatus,
+          date: "Today",
+        };
+      }));
     } else {
-      setMockBookings(val);
+      setBookings([]);
     }
-  };
+  }, [dbBookings]);
 
-  const [maintenanceTickets, setMaintenanceTickets] = useState([
-    {
-      id: "TKT-301",
-      turf: "Football Pitch B",
-      issue: "Loose turf seam near midfield line",
-      urgency: "Medium",
-      status: "Logged",
-    },
-  ]);
+  const [maintenanceTickets, setMaintenanceTickets] = useState<any[]>(() => {
+    const stored = localStorage.getItem("supervisor_maintenance_tickets");
+    return stored ? JSON.parse(stored) : [];
+  });
 
-  const [guestBookings, setGuestBookings] = useState([
-    {
-      id: "GST-601",
-      name: "Tushar Dev",
-      phone: "+91 95555 44444",
-      turf: "Football Pitch A",
-      slot: "09:00 PM - 10:00 PM",
-      amount: 1500,
-      paymentMode: "Cash",
-    },
-  ]);
+  const [guestBookings, setGuestBookings] = useState<any[]>(() => {
+    const stored = localStorage.getItem("supervisor_guest_bookings");
+    return stored ? JSON.parse(stored) : [];
+  });
 
   const [dailyCollections, setDailyCollections] = useState({
-    cash: 4500,
-    upi: 8600,
+    cash: 0,
+    upi: 0,
   });
+
+  useEffect(() => {
+    localStorage.setItem("supervisor_maintenance_tickets", JSON.stringify(maintenanceTickets));
+  }, [maintenanceTickets]);
+
+  useEffect(() => {
+    localStorage.setItem("supervisor_guest_bookings", JSON.stringify(guestBookings));
+  }, [guestBookings]);
+
+  useEffect(() => {
+    let cash = 0;
+    let upi = 0;
+
+    dbBookings.forEach((b: any) => {
+      const status = b.status?.toLowerCase();
+      if (status === "cancelled") return;
+
+      const method = (b.paymentMethod || "").toLowerCase();
+      const amt = b.amount || 0;
+
+      if (method === "cash") {
+        cash += amt;
+      } else {
+        upi += amt;
+      }
+    });
+
+    guestBookings.forEach((gb) => {
+      const amt = Number(gb.amount) || 0;
+      if (gb.paymentMode?.toLowerCase() === "cash") {
+        cash += amt;
+      } else {
+        upi += amt;
+      }
+    });
+
+    setDailyCollections({
+      cash: cash + localPaymentsTotal.cash,
+      upi: upi + localPaymentsTotal.upi,
+    });
+  }, [dbBookings, guestBookings, localPaymentsTotal]);
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -231,10 +205,10 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
       )
     );
 
-    setDailyCollections({
-      cash: dailyCollections.cash + Number(splitAmount.cash),
-      upi: dailyCollections.upi + Number(splitAmount.upi),
-    });
+    setLocalPaymentsTotal((prev) => ({
+      cash: prev.cash + Number(splitAmount.cash),
+      upi: prev.upi + Number(splitAmount.upi),
+    }));
 
     setPaymentModal(null);
     toast.success("Split payment recorded. Booking marked Completed.");
@@ -255,18 +229,6 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
         id: newId,
       },
     ]);
-
-    if (newGuest.paymentMode === "Cash") {
-      setDailyCollections({
-        ...dailyCollections,
-        cash: dailyCollections.cash + Number(newGuest.amount),
-      });
-    } else {
-      setDailyCollections({
-        ...dailyCollections,
-        upi: dailyCollections.upi + Number(newGuest.amount),
-      });
-    }
 
     setGuestModal(false);
     toast.success("Walk-in slot assigned successfully");
