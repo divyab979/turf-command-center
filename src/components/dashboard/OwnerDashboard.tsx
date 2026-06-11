@@ -285,7 +285,13 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
         due: isPaid ? 0 : remaining,
         method: b.paymentMethod || "UPI",
         status: status,
-        date: b.slot ? b.slot.split("•")[0].trim() : "Today",
+        date: b.slot && typeof b.slot === "object" && b.slot.date 
+          ? new Date(b.slot.date).toLocaleDateString() 
+          : b.slot && typeof b.slot === "string" 
+          ? b.slot.split("•")[0].trim() 
+          : b.bookingDate 
+          ? new Date(b.bookingDate).toLocaleDateString() 
+          : "Today",
       };
     });
     setPayments(list);
@@ -382,7 +388,14 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
     ];
 
     dbBookings.forEach((b) => {
-      const slotStr = (b.slot || "").toLowerCase();
+      let slotStr = "";
+      if (b.slot && typeof b.slot === "object" && b.slot.startTime) {
+        slotStr = b.slot.startTime.toLowerCase();
+      } else if (typeof b.slot === "string") {
+        slotStr = b.slot.toLowerCase();
+      } else if (b.startTime && typeof b.startTime === "string") {
+        slotStr = b.startTime.toLowerCase();
+      }
       let hour = -1;
       const timeMatch = slotStr.match(/(\d+):(\d+)\s*(pm|am)?/i) || slotStr.match(/(\d+)\s*(pm|am)/i);
       if (timeMatch) {
