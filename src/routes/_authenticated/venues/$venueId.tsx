@@ -34,6 +34,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { CreateVenueForm } from "@/features/venue/components/create-venue-form";
+import { formatLocalDate } from "@/lib/utils";
 
 interface Turf {
   id: string;
@@ -122,9 +123,7 @@ const [
   selectedDate,
   setSelectedDate,
 ] = useState(
-  new Date()
-    .toISOString()
-    .split("T")[0]
+  formatLocalDate()
 );
 
 const lockMutation = useMutation({

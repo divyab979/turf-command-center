@@ -24,6 +24,8 @@ import {
   Users,
 } from "lucide-react";
 
+import { formatLocalDate } from "@/lib/utils";
+
 export const Route = createFileRoute("/_authenticated/calendar")({
   component: CalendarPage,
 });
@@ -33,7 +35,7 @@ function CalendarPage() {
   const role = user?.role || "SUPERVISOR";
 
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
+    formatLocalDate()
   );
 
   const [activeVenueId, setActiveVenueId] = useState<string>(
