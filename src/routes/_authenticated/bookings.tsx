@@ -248,18 +248,28 @@ function BookingsPage() {
   const filteredData = useMemo(() => {
     return localBookings.filter((booking) => {
       // Scoped permissions:
-      // Supervisor: Only Arena Turf bookings
+      // Supervisor: Only bookings matching assigned venueId (or fallback Arena Turf)
       // Owner: Only Arena Turf and Goal Sports
       // Super Admin: All
-      if (role === "SUPERVISOR" && booking.venue !== "Arena Turf") return false;
+      if (role === "SUPERVISOR") {
+        if (user?.venueId) {
+          if (booking.venueId !== user.venueId) return false;
+        } else {
+          if (booking.venue !== "Arena Turf") return false;
+        }
+      }
       if (role === "OWNER" && booking.venue === "Wembley Turf") return false;
 
+      const customerStr = booking.customer || "";
+      const idStr = booking.id || "";
+      const statusStr = booking.status || "";
+
       const matchesSearch =
-        booking.customer.toLowerCase().includes(search.toLowerCase()) ||
-        booking.id.toLowerCase().includes(search.toLowerCase());
+        customerStr.toLowerCase().includes((search || "").toLowerCase()) ||
+        idStr.toLowerCase().includes((search || "").toLowerCase());
 
       const matchesStatus =
-        status === "all" ? true : booking.status.toLowerCase() === status.toLowerCase();
+        status === "all" ? true : statusStr.toLowerCase() === (status || "").toLowerCase();
 
       return matchesSearch && matchesStatus;
     });
@@ -277,7 +287,7 @@ function BookingsPage() {
     toast.success(`Booking status updated to ${newStatus}`);
   };
 
-  const columns: ColumnDef<Booking>[] = [
+  const columns = useMemo<ColumnDef<Booking>[]>(() => [
     {
       accessorKey: "id",
       header: "Booking ID",
@@ -304,7 +314,7 @@ function BookingsPage() {
         let cashPaid = 0;
         let onlinePaid = 0;
         splits.forEach((s) => {
-          const m = s.method.toLowerCase();
+          const m = (s.method || "").toLowerCase();
           if (m === "cash") {
             cashPaid += s.amount;
           } else {
@@ -361,7 +371,7 @@ function BookingsPage() {
         </Button>
       ),
     },
-  ];
+  ], [setSelectedBooking]);
 
   if (isLoading) {
     return <PageLoader />;
@@ -658,198 +668,200 @@ function BookingsPage() {
         title={selectedBooking?.id || "Booking Details"}
         description="Manage booking status, checklists, and payment collections."
       >
-        <div className="space-y-5 font-semibold text-slate-700 text-sm">
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-1">
-            <p className="text-xs text-slate-400 font-bold uppercase">Customer Details</p>
-            <h3 className="text-lg font-bold text-slate-800">{selectedBooking?.customer}</h3>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+        {selectedBooking && (
+          <div className="space-y-5 font-semibold text-slate-700 text-sm">
             <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-1">
-              <p className="text-xs text-slate-400 font-bold uppercase">Assigned Venue</p>
-              <h3 className="font-bold text-slate-800">{selectedBooking?.venue}</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase">Customer Details</p>
+              <h3 className="text-lg font-bold text-slate-800">{selectedBooking.customer}</h3>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-1">
+                <p className="text-xs text-slate-400 font-bold uppercase">Assigned Venue</p>
+                <h3 className="font-bold text-slate-800">{selectedBooking.venue}</h3>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-1">
+                <p className="text-xs text-slate-400 font-bold uppercase">Booking Timing</p>
+                <h3 className="font-bold text-slate-800">{selectedBooking.slot}</h3>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-1">
-              <p className="text-xs text-slate-400 font-bold uppercase">Booking Timing</p>
-              <h3 className="font-bold text-slate-800">{selectedBooking?.slot}</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase">Cash/Digital Pricing</p>
+              <h3 className="text-2xl font-extrabold text-emerald-800">
+                ₹{selectedBooking.amount}
+              </h3>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-1">
-            <p className="text-xs text-slate-400 font-bold uppercase">Cash/Digital Pricing</p>
-            <h3 className="text-2xl font-extrabold text-emerald-800">
-              ₹{selectedBooking?.amount}
-            </h3>
-          </div>
+            {/* Split Payments Section */}
+            {(() => {
+              const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount, selectedBooking);
+              const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
+              const remainingDue = Math.max(0, selectedBooking.amount - totalPaid);
 
-          {/* Split Payments Section */}
-          {selectedBooking && (() => {
-            const splits = getSplitPayments(selectedBooking.id, selectedBooking.amount, selectedBooking);
-            const totalPaid = splits.reduce((sum, s) => sum + s.amount, 0);
-            const remainingDue = Math.max(0, selectedBooking.amount - totalPaid);
+              return (
+                <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-50 pb-2">
+                    <p className="text-xs text-slate-400 font-bold uppercase">Split Payment Breakdown</p>
+                    {remainingDue > 0 ? (
+                      <span className="text-[10px] font-extrabold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Partially Paid
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Fully Paid
+                      </span>
+                    )}
+                  </div>
 
-            return (
-              <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm space-y-4">
-                <div className="flex justify-between items-center border-b border-slate-50 pb-2">
-                  <p className="text-xs text-slate-400 font-bold uppercase">Split Payment Breakdown</p>
-                  {remainingDue > 0 ? (
-                    <span className="text-[10px] font-extrabold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Partially Paid
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Fully Paid
-                    </span>
-                  )}
-                </div>
-
-                {/* Splits List */}
-                <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-                  {splits.map((s, index) => (
-                    <div key={s.id || index} className="flex justify-between items-center text-xs bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-700 uppercase">{s.method}</span>
-                          {s.recordedBy && (
-                            <span className="text-[9px] text-slate-400 font-medium">by {s.recordedBy}</span>
-                          )}
+                  {/* Splits List */}
+                  <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                    {splits.map((s, index) => (
+                      <div key={s.id || index} className="flex justify-between items-center text-xs bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-700 uppercase">{s.method}</span>
+                            {s.recordedBy && (
+                              <span className="text-[9px] text-slate-400 font-medium">by {s.recordedBy}</span>
+                            )}
+                          </div>
+                          {s.note && <p className="text-[10px] text-slate-500 italic mt-0.5">"{s.note}"</p>}
+                          {s.timestamp && <p className="text-[9px] text-slate-400 mt-0.5">{s.timestamp}</p>}
                         </div>
-                        {s.note && <p className="text-[10px] text-slate-500 italic mt-0.5">"{s.note}"</p>}
-                        {s.timestamp && <p className="text-[9px] text-slate-400 mt-0.5">{s.timestamp}</p>}
+                        <span className="font-bold text-slate-800">₹{s.amount}</span>
                       </div>
-                      <span className="font-bold text-slate-800">₹{s.amount}</span>
+                    ))}
+                  </div>
+
+                  {/* Balance Summary */}
+                  <div className="pt-2 flex justify-between items-center text-xs font-bold border-t border-slate-100">
+                    <div className="text-slate-500">
+                      Paid: <span className="text-emerald-700">₹{totalPaid}</span>
                     </div>
-                  ))}
-                </div>
-
-                {/* Balance Summary */}
-                <div className="pt-2 flex justify-between items-center text-xs font-bold border-t border-slate-100">
-                  <div className="text-slate-500">
-                    Paid: <span className="text-emerald-700">₹{totalPaid}</span>
+                    <div className="text-slate-500">
+                      Remaining: <span className={remainingDue > 0 ? "text-amber-600" : "text-emerald-700"}>₹{remainingDue}</span>
+                    </div>
                   </div>
-                  <div className="text-slate-500">
-                    Remaining: <span className={remainingDue > 0 ? "text-amber-600" : "text-emerald-700"}>₹{remainingDue}</span>
-                  </div>
-                </div>
 
-                {/* Add Split Form */}
-                {remainingDue > 0 && (
-                  <form onSubmit={handleRecordSplitPayment} className="space-y-3 pt-2 border-t border-slate-50">
-                    <p className="text-[11px] text-slate-500 font-bold">Record Split Payment Part</p>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 uppercase font-bold">Method</label>
-                        <select
-                          value={splitMethod}
-                          onChange={(e: any) => setSplitMethod(e.target.value)}
-                          className="w-full text-xs border border-slate-200 rounded-xl p-2 bg-transparent font-medium text-slate-700 outline-none"
-                        >
-                          <option value="cash">Cash</option>
-                          <option value="UPI">UPI</option>
-                          <option value="bank transfer">Bank Transfer</option>
-                          <option value="card">Card</option>
-                          <option value="other">Other</option>
-                        </select>
+                  {/* Add Split Form */}
+                  {remainingDue > 0 && (
+                    <form onSubmit={handleRecordSplitPayment} className="space-y-3 pt-2 border-t border-slate-50">
+                      <p className="text-[11px] text-slate-500 font-bold">Record Split Payment Part</p>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 uppercase font-bold">Method</label>
+                          <select
+                            value={splitMethod}
+                            onChange={(e: any) => setSplitMethod(e.target.value)}
+                            className="w-full text-xs border border-slate-200 rounded-xl p-2 bg-transparent font-medium text-slate-700 outline-none"
+                          >
+                            <option value="cash">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="bank transfer">Bank Transfer</option>
+                            <option value="card">Card</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 uppercase font-bold">Amount (₹)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max={remainingDue}
+                            step="any"
+                            required
+                            value={splitAmountInput}
+                            onChange={(e) => setSplitAmountInput(e.target.value)}
+                            placeholder={`Max: ${remainingDue}`}
+                            className="w-full text-xs border border-slate-200 rounded-xl p-2 font-medium text-slate-700 outline-none"
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 uppercase font-bold">Amount (₹)</label>
+                        <label className="text-[10px] text-slate-400 uppercase font-bold">Note / Reference (Optional)</label>
                         <input
-                          type="number"
-                          min="1"
-                          max={remainingDue}
-                          step="any"
-                          required
-                          value={splitAmountInput}
-                          onChange={(e) => setSplitAmountInput(e.target.value)}
-                          placeholder={`Max: ${remainingDue}`}
+                          type="text"
+                          value={splitNote}
+                          onChange={(e) => setSplitNote(e.target.value)}
+                          placeholder="e.g. Transaction ID, GPay details"
                           className="w-full text-xs border border-slate-200 rounded-xl p-2 font-medium text-slate-700 outline-none"
                         />
                       </div>
-                    </div>
 
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 uppercase font-bold">Note / Reference (Optional)</label>
-                      <input
-                        type="text"
-                        value={splitNote}
-                        onChange={(e) => setSplitNote(e.target.value)}
-                        placeholder="e.g. Transaction ID, GPay details"
-                        className="w-full text-xs border border-slate-200 rounded-xl p-2 font-medium text-slate-700 outline-none"
-                      />
-                    </div>
+                      <Button
+                        type="submit"
+                        className="w-full rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2 h-auto text-xs"
+                      >
+                        Record Payment Part
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              );
+            })()}
 
-                    <Button
-                      type="submit"
-                      className="w-full rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-2 h-auto text-xs"
-                    >
-                      Record Payment Part
-                    </Button>
-                  </form>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Supervisor check-in checklist panel */}
-          {role === "SUPERVISOR" ? (
-            <div className="space-y-4 pt-2">
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-                <p className="text-xs font-bold text-slate-500 uppercase">On-Ground Checklist</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedBooking!.status.toLowerCase() !== "completed" && (
-                    <>
-                      {selectedBooking!.status.toLowerCase() !== "arrived" && (
+            {/* Supervisor check-in checklist panel */}
+            {role === "SUPERVISOR" ? (
+              <div className="space-y-4 pt-2">
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <p className="text-xs font-bold text-slate-500 uppercase">On-Ground Checklist</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(selectedBooking.status || "").toLowerCase() !== "completed" && (
+                      <>
+                        {(selectedBooking.status || "").toLowerCase() !== "arrived" && (
+                          <Button
+                            onClick={() => handleUpdateStatus(selectedBooking.id, "Arrived")}
+                            className="bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs py-1.5 h-auto"
+                          >
+                            Mark Arrived
+                          </Button>
+                        )}
                         <Button
-                          onClick={() => handleUpdateStatus(selectedBooking!.id, "Arrived")}
+                          onClick={() => handleUpdateStatus(selectedBooking.id, "Completed")}
                           className="bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs py-1.5 h-auto"
                         >
-                          Mark Arrived
+                          Mark Completed
                         </Button>
-                      )}
-                      <Button
-                        onClick={() => handleUpdateStatus(selectedBooking!.id, "Completed")}
-                        className="bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs py-1.5 h-auto"
-                      >
-                        Mark Completed
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    onClick={() => handleMarkNoShow(selectedBooking!.id)}
-                    variant="outline"
-                    className="rounded-xl text-xs py-1.5 h-auto text-red-600 border-red-200 hover:bg-red-50"
-                  >
-                    Mark No Show
-                  </Button>
+                      </>
+                    )}
+                    <Button
+                      onClick={() => handleMarkNoShow(selectedBooking.id)}
+                      variant="outline"
+                      className="rounded-xl text-xs py-1.5 h-auto text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                      Mark No Show
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-amber-50/50 border border-amber-200/50 rounded-2xl text-xs text-amber-800 font-medium">
+                  ⚠️ Cancellation is administrative only. Please contact Venue Owner for overrides.
                 </div>
               </div>
-
-              <div className="p-4 bg-amber-50/50 border border-amber-200/50 rounded-2xl text-xs text-amber-800 font-medium">
-                ⚠️ Cancellation is administrative only. Please contact Venue Owner for overrides.
+            ) : (
+              // Full Admin Actions
+              <div className="flex gap-3 pt-4">
+                <Button
+                  onClick={() => handleUpdateStatus(selectedBooking.id, "Confirmed")}
+                  className="flex-1 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold"
+                >
+                  Confirm Booking
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleUpdateStatus(selectedBooking.id, "Cancelled")}
+                  className="flex-1 rounded-xl text-red-600 border-red-100 hover:bg-red-50 font-bold"
+                >
+                  Cancel Slot
+                </Button>
               </div>
-            </div>
-          ) : (
-            // Full Admin Actions
-            <div className="flex gap-3 pt-4">
-              <Button
-                onClick={() => handleUpdateStatus(selectedBooking!.id, "Confirmed")}
-                className="flex-1 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-bold"
-              >
-                Confirm Booking
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => handleUpdateStatus(selectedBooking!.id, "Cancelled")}
-                className="flex-1 rounded-xl text-red-600 border-red-100 hover:bg-red-50 font-bold"
-              >
-                Cancel Slot
-              </Button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </DetailDrawer>
 
       <DetailDrawer

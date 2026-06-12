@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 
 import { formatLocalDate } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 export const Route = createFileRoute("/_authenticated/calendar")({
   component: CalendarPage,
@@ -172,11 +173,31 @@ function CalendarPage() {
           };
         })
       );
-      toast.success(
-        nextStatus === "BLOCKED"
-          ? "Slot successfully blocked for ground maintenance"
-          : "Slot successfully opened back to booking"
-      );
+      
+      api.post(`/slots/${slot.id}/toggle-block`)
+        .then(() => {
+          toast.success(
+            nextStatus === "BLOCKED"
+              ? "Slot successfully blocked for ground maintenance"
+              : "Slot successfully opened back to booking"
+          );
+        })
+        .catch((err: any) => {
+          // Revert on error
+          setLocalTurfs((prev) =>
+            prev.map((t) => {
+              if (t.id !== turfId) return t;
+              return {
+                ...t,
+                slots: t.slots.map((s: any) =>
+                  s.id === slot.id ? { ...s, status: slot.status } : s
+                ),
+              };
+            })
+          );
+          console.error("Failed to toggle slot block status:", err);
+          toast.error("Failed to update slot status in backend: " + (err.response?.data?.message || err.message));
+        });
     } else if (role === "OWNER" || role === "SUPER_ADMIN") {
       // Open Pricing and Configuration Drawer
       setActiveTurfId(turfId);
@@ -216,25 +237,48 @@ function CalendarPage() {
   const handleToggleBlockFromOwner = () => {
     if (!activeSlot) return;
     const nextStatus = activeSlot.status === "AVAILABLE" ? "BLOCKED" : "AVAILABLE";
+    const slotId = activeSlot.id;
+    const turfId = activeTurfId;
+    const prevStatus = activeSlot.status;
 
     setLocalTurfs((prev) =>
       prev.map((t) => {
-        if (t.id !== activeTurfId) return t;
+        if (t.id !== turfId) return t;
         return {
           ...t,
           slots: t.slots.map((s: any) =>
-            s.id === activeSlot.id ? { ...s, status: nextStatus } : s
+            s.id === slotId ? { ...s, status: nextStatus } : s
           ),
         };
       })
     );
 
     setActiveSlot(null);
-    toast.success(
-      nextStatus === "BLOCKED"
-        ? "Slot successfully blocked"
-        : "Slot opened back to booking"
-    );
+
+    api.post(`/slots/${slotId}/toggle-block`)
+      .then(() => {
+        toast.success(
+          nextStatus === "BLOCKED"
+            ? "Slot successfully blocked"
+            : "Slot opened back to booking"
+        );
+      })
+      .catch((err: any) => {
+        // Revert on error
+        setLocalTurfs((prev) =>
+          prev.map((t) => {
+            if (t.id !== turfId) return t;
+            return {
+              ...t,
+              slots: t.slots.map((s: any) =>
+                s.id === slotId ? { ...s, status: prevStatus } : s
+              ),
+            };
+          })
+        );
+        console.error("Failed to toggle slot block status:", err);
+        toast.error("Failed to update slot status in backend: " + (err.response?.data?.message || err.message));
+      });
   };
 
   if (isLoading) {

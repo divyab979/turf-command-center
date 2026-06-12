@@ -16,4 +16,11 @@ export interface Booking {
   advancePaid?: number;
   remainingAmount?: number;
   paymentMethod?: string;
+  venueId?: string;
+  bookingDate?: string;
+  customerPhone?: string;
+  notes?: string;
+  turfName?: string;
+  startTime?: string;
+  endTime?: string;
 }

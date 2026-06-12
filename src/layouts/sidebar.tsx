@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -120,7 +121,7 @@ export const Sidebar = () => {
     }
   };
 
-  const sections = getNavSections(role);
+  const sections = useMemo(() => getNavSections(role), [role]);
 
   return (
     <aside className="hidden md:flex w-72 flex-col border-r border-border bg-[#14532D] text-white overflow-y-auto">

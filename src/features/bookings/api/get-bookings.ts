@@ -50,6 +50,20 @@ export async function getBookings(): Promise<Booking[]> {
         booking.remainingAmount,
       paymentMethod:
         booking.paymentMethod,
+      venueId:
+        booking.venueId,
+      bookingDate:
+        booking.bookingDate,
+      customerPhone:
+        booking.customerPhone,
+      notes:
+        booking.notes,
+      turfName:
+        booking.turf?.name,
+      startTime:
+        booking.slot?.startTime || booking.startTime,
+      endTime:
+        booking.slot?.endTime || booking.endTime,
     })
   );
 }

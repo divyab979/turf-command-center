@@ -19,6 +19,8 @@ export interface Venue {
 
   turfs: {
     id: string;
+    name: string;
+    sport?: string;
   }[];
 }
 export const getVenues =

@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAuthStore } from "@/store/auth-store";
 import { useMutation } from "@tanstack/react-query";
 import { loginUser } from "@/services/auth-service";
+import { Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/login")({ component: LoginPage });
 
@@ -16,37 +17,38 @@ function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const [role, setRole] = useState("owner");
   const [email, setEmail] = useState("");
-const [password, setPassword] = useState("");
-const mutation = useMutation({
-  mutationFn: loginUser,
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const mutation = useMutation({
+    mutationFn: loginUser,
 
-  onSuccess: (data) => {
-    const mappedRole =
-      role === "super_admin"
-        ? "SUPER_ADMIN"
-        : role === "owner"
-        ? "OWNER"
-        : "SUPERVISOR";
+    onSuccess: (data) => {
+      const mappedRole =
+        role === "super_admin"
+          ? "SUPER_ADMIN"
+          : role === "owner"
+          ? "OWNER"
+          : "SUPERVISOR";
 
-    login({
-      ...data,
-      user: {
-        ...data.user,
-        role: mappedRole,
-        name: data.user?.name || (role === "super_admin" ? "Super Admin" : role === "owner" ? "Venue Owner" : "Supervisor Staff"),
-      },
-    });
+      login({
+        ...data,
+        user: {
+          ...data.user,
+          role: mappedRole,
+          name: data.user?.name || (role === "super_admin" ? "Super Admin" : role === "owner" ? "Venue Owner" : "Supervisor Staff"),
+        },
+      });
 
-    navigate({
-      to: "/dashboard",
-    } as any);
-  },
+      navigate({
+        to: "/dashboard",
+      } as any);
+    },
 
-  onError: (error) => {
-    console.error(error);
-    alert("Invalid credentials");
-  },
-});
+    onError: (error) => {
+      console.error(error);
+      alert("Invalid credentials");
+    },
+  });
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
@@ -78,43 +80,60 @@ const mutation = useMutation({
               <TabsTrigger value="owner">Owner</TabsTrigger>
               <TabsTrigger value="supervisor">Supervisor</TabsTrigger>
             </TabsList>
-            <TabsContent value={role} className="mt-5 space-y-4">
-              <div>
-                <Label>Email or mobile</Label>
-                <Input
-  value={email}
-  onChange={(e) => setEmail(e.target.value)}
-  placeholder="johndoe@test.com"
-  className="mt-1.5"
-/>
-              </div>
-              <div>
-                <Label>Password</Label>
-                <Input
-  type="password"
-  value={password}
-  onChange={(e) => setPassword(e.target.value)}
-  placeholder="Password"
-  className="mt-1.5"
-/>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <label className="flex items-center gap-2 text-muted-foreground"><input type="checkbox" className="accent-primary" defaultChecked /> Remember me</label>
-                <a className="text-primary hover:underline" href="#">Forgot?</a>
-              </div>
-            <Button
-  onClick={() => {
-    mutation.mutate({
-      email,
-      password,
-    });
-  }}
-  disabled={mutation.isPending}
-  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
->
-  {mutation.isPending ? "Signing in..." : "Sign in"}
-</Button>
-              <div className="text-xs text-center text-muted-foreground">Demo: any credentials sign you in as the selected role.</div>
+            <TabsContent value={role} className="mt-5">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  mutation.mutate({
+                    email,
+                    password,
+                  });
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label>Email or mobile</Label>
+                  <Input
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="johndoe@test.com"
+                    className="mt-1.5"
+                  />
+                </div>
+                <div>
+                  <Label>Password</Label>
+                  <div className="relative mt-1.5">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center gap-2 text-muted-foreground">
+                    <input type="checkbox" className="accent-primary" defaultChecked /> Remember me
+                  </label>
+                  <a className="text-primary hover:underline" href="#">Forgot?</a>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={mutation.isPending}
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {mutation.isPending ? "Signing in..." : "Sign in"}
+                </Button>
+                <div className="text-xs text-center text-muted-foreground">Demo: any credentials sign you in as the selected role.</div>
+              </form>
             </TabsContent>
           </Tabs>
         </Card>

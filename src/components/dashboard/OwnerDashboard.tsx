@@ -49,27 +49,55 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
     return stored ? JSON.parse(stored) : [];
   });
 
-  const [guestBookings, setGuestBookings] = useState<any[]>(() => {
-    const stored = localStorage.getItem("owner_guest_bookings");
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [guestBookings, setGuestBookings] = useState<any[]>([]);
 
-  const [maintenance, setMaintenance] = useState<any[]>(() => {
-    const stored = localStorage.getItem("owner_maintenance");
-    return stored ? JSON.parse(stored) : [];
-  });
+  useEffect(() => {
+    if (dbBookings && dbBookings.length > 0) {
+      const dbWalkIns = dbBookings
+        .filter((b) => b.notes === "Guest Walk-in booking")
+        .map((b) => ({
+          id: b.id,
+          name: b.customer,
+          phone: b.customerPhone || "9999999999",
+          turf: b.turfName || "Turf",
+          slot: b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : b.slot,
+          amount: b.amount,
+          paymentMode: b.paymentMethod || "UPI",
+          date: "Today",
+        }));
+      setGuestBookings(dbWalkIns);
+    }
+  }, [dbBookings]);
+
+  const [maintenance, setMaintenance] = useState<any[]>([]);
+  const [loadingMaintenance, setLoadingMaintenance] = useState(false);
+
+  const fetchMaintenance = async () => {
+    try {
+      setLoadingMaintenance(true);
+      const res = await api.get("/turfs/maintenance/list");
+      const mapped = (res.data || []).map((t: any) => ({
+        id: t.id,
+        status: t.status,
+        turf: t.turf?.name || "Unknown Turf",
+        issue: t.issue,
+        urgency: t.severity,
+        severity: t.severity,
+        venue: t.venue?.name || "Unknown Venue",
+        date: t.createdAt ? new Date(t.createdAt).toLocaleDateString() : "Today",
+        supervisor: t.supervisor || "Staff",
+      }));
+      setMaintenance(mapped);
+    } catch (err) {
+      console.error("Failed to load maintenance issues", err);
+    } finally {
+      setLoadingMaintenance(false);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem("owner_tournaments", JSON.stringify(tournaments));
   }, [tournaments]);
-
-  useEffect(() => {
-    localStorage.setItem("owner_guest_bookings", JSON.stringify(guestBookings));
-  }, [guestBookings]);
-
-  useEffect(() => {
-    localStorage.setItem("owner_maintenance", JSON.stringify(maintenance));
-  }, [maintenance]);
 
   // Venue & Staff dynamic databases
   const [dbVenues, setDbVenues] = useState<any[]>([]);
@@ -119,6 +147,7 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
     fetchVenues();
     fetchStaff();
     fetchBookings();
+    fetchMaintenance();
   }, []);
 
   useEffect(() => {
@@ -313,18 +342,86 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
   const [newGuest, setNewGuest] = useState({
     name: "",
     phone: "",
-    turf: "Football Pitch A",
-    slot: "07:00 PM - 08:00 PM",
+    turf: "",
+    slotId: "",
     amount: 1200,
     paymentMode: "UPI (GPay)",
   });
 
+  const [guestVenueId, setGuestVenueId] = useState("");
+  const [ownerVenueSlots, setOwnerVenueSlots] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (addGuestModal && dbVenues.length > 0 && !guestVenueId) {
+      setGuestVenueId(dbVenues[0].id);
+    }
+  }, [addGuestModal, dbVenues]);
+
+  useEffect(() => {
+    if (guestVenueId) {
+      const todayStr = new Date().toISOString().substring(0, 10);
+      api.get(`/turfs/${guestVenueId}?date=${todayStr}`)
+        .then((res) => {
+          setOwnerVenueSlots(res.data || []);
+        })
+        .catch((err) => console.error("Error loading slots for owner walk-in", err));
+    }
+  }, [guestVenueId]);
+
+  const ownerTurfs = useMemo(() => {
+    return ownerVenueSlots.map((t) => ({ id: t.id, name: t.name, sport: t.sport }));
+  }, [ownerVenueSlots]);
+
+  const ownerTurfSlots = useMemo(() => {
+    const matched = ownerVenueSlots.find((t) => t.id === newGuest.turf);
+    if (matched) {
+      return (matched.slots || []).filter((s: any) => s.status === "AVAILABLE");
+    }
+    return [];
+  }, [ownerVenueSlots, newGuest.turf]);
+
+  useEffect(() => {
+    if (ownerTurfs.length > 0 && !newGuest.turf) {
+      setNewGuest((prev) => ({ ...prev, turf: ownerTurfs[0].id }));
+    }
+  }, [ownerTurfs]);
+
+  useEffect(() => {
+    if (ownerTurfSlots.length > 0) {
+      setNewGuest((prev) => ({ ...prev, slotId: ownerTurfSlots[0].id }));
+    } else {
+      setNewGuest((prev) => ({ ...prev, slotId: "" }));
+    }
+  }, [ownerTurfSlots]);
+
+  const ownerAllTurfs = useMemo(() => {
+    const list: any[] = [];
+    dbVenues.forEach((v) => {
+      (v.turfs || []).forEach((t: any) => {
+        list.push({
+          id: t.id,
+          name: `${v.name} - ${t.name}`,
+        });
+      });
+    });
+    return list;
+  }, [dbVenues]);
+
+  useEffect(() => {
+    if (ownerAllTurfs.length > 0 && !newMnt.turf) {
+      setNewMnt((prev) => ({
+        ...prev,
+        turf: ownerAllTurfs[0].id,
+      }));
+    }
+  }, [ownerAllTurfs]);
+
   const [addMntModal, setAddMntModal] = useState(false);
   const [newMnt, setNewMnt] = useState({
-    turf: "Football Pitch A",
+    turf: "",
     issue: "",
     severity: "Low",
-    supervisor: "Ramesh Kumar",
+    supervisor: "Owner",
   });
 
   const [addSupModal, setAddSupModal] = useState(false);
@@ -442,13 +539,15 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
     }
   };
 
-  const handleResolveMaintenance = (id: string) => {
-    setMaintenance(
-      maintenance.map((m) =>
-        m.id === id ? { ...m, status: "Resolved" } : m
-      )
-    );
-    toast.success("Turf maintenance issue marked Resolved");
+  const handleResolveMaintenance = async (id: string) => {
+    try {
+      await api.patch(`/turfs/maintenance/${id}/status`, { status: "Resolved" });
+      toast.success("Turf maintenance issue marked Resolved");
+      fetchMaintenance();
+    } catch (err: any) {
+      console.error("Failed to resolve maintenance issue", err);
+      toast.error("Failed to update status: " + (err.response?.data?.message || err.message));
+    }
   };
 
   const handleCollectDues = (id: string) => {
@@ -481,43 +580,107 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
     toast.success("Tournament booking generated successfully. Slots blocked.");
   };
 
-  const handleCreateGuest = (e: React.FormEvent) => {
+  const handleCreateGuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGuest.name || !newGuest.phone) {
-      toast.error("Please fill in all guest fields");
+      toast.error("Please fill in player name and phone");
       return;
     }
-    const newId = `GST-${guestBookings.length + 701}`;
-    setGuestBookings([
-      ...guestBookings,
-      {
-        ...newGuest,
-        id: newId,
-        date: "Today",
-      },
-    ]);
-    setAddGuestModal(false);
-    toast.success("Walk-in slot assigned and receipt created");
+    if (!guestVenueId) {
+      toast.error("Please select a venue");
+      return;
+    }
+    if (!newGuest.turf) {
+      toast.error("Please select a turf");
+      return;
+    }
+    if (!newGuest.slotId) {
+      toast.error("Please select a slot");
+      return;
+    }
+
+    const matchedVenue = dbVenues.find((v) => v.id === guestVenueId);
+    const matchedTurf = ownerVenueSlots.find((t) => t.id === newGuest.turf);
+    const matchedSlot = ownerTurfSlots.find((s) => s.id === newGuest.slotId);
+
+    if (!matchedSlot) {
+      toast.error("Invalid slot selected");
+      return;
+    }
+
+    try {
+      const payload = {
+        venueId: guestVenueId,
+        customerName: newGuest.name,
+        customerPhone: newGuest.phone,
+        startTime: matchedSlot.startTime,
+        endTime: matchedSlot.endTime,
+        totalAmount: Number(newGuest.amount),
+        gameActivity: matchedTurf?.sport || "FOOTBALL",
+        paymentMethod: newGuest.paymentMode,
+        turfId: newGuest.turf,
+        slotId: newGuest.slotId,
+        notes: "Guest Walk-in booking",
+      };
+
+      const res = await api.post("/bookings/custom", payload);
+      
+      setGuestBookings((prev) => [
+        ...prev,
+        {
+          id: res.data.id,
+          name: newGuest.name,
+          phone: newGuest.phone,
+          turf: matchedTurf?.name || "Turf",
+          slot: `${matchedSlot.startTime} - ${matchedSlot.endTime}`,
+          amount: Number(newGuest.amount),
+          paymentMode: newGuest.paymentMode,
+          date: "Today",
+        },
+      ]);
+
+      setAddGuestModal(false);
+      toast.success("Walk-in slot assigned and receipt created");
+      fetchBookings();
+    } catch (err: any) {
+      console.error("Failed to create walk-in booking", err);
+      toast.error("Failed to create walk-in booking: " + (err.response?.data?.message || err.message));
+    }
   };
 
-  const handleCreateMnt = (e: React.FormEvent) => {
+  const handleCreateMnt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMnt.issue) {
       toast.error("Please enter a description of the issue");
       return;
     }
-    const newId = `MNT-${maintenance.length + 201}`;
-    setMaintenance([
-      ...maintenance,
-      {
-        ...newMnt,
-        id: newId,
-        date: "Today",
-        status: "Logged",
-      },
-    ]);
-    setAddMntModal(false);
-    toast.success("Ground maintenance ticket raised. Turf schedule updated.");
+    if (!newMnt.turf) {
+      toast.error("Please select a turf space");
+      return;
+    }
+
+    try {
+      const payload = {
+        turfId: newMnt.turf,
+        issue: newMnt.issue,
+        severity: newMnt.severity,
+        supervisor: newMnt.supervisor || "Owner",
+      };
+
+      await api.post("/turfs/maintenance", payload);
+      setAddMntModal(false);
+      toast.success("Ground maintenance ticket raised. Turf schedule updated.");
+      fetchMaintenance();
+      setNewMnt({
+        turf: ownerAllTurfs[0]?.id || "",
+        issue: "",
+        severity: "Low",
+        supervisor: "Owner",
+      });
+    } catch (err: any) {
+      console.error("Failed to raise maintenance ticket", err);
+      toast.error("Failed to raise maintenance ticket: " + (err.response?.data?.message || err.message));
+    }
   };
 
   const handleCreateSup = async (e: React.FormEvent) => {
@@ -1002,16 +1165,55 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
                   />
                 </div>
                 <div className="space-y-1">
+                  <Label className="text-slate-500 font-bold">Select Venue</Label>
+                  <select
+                    value={guestVenueId}
+                    onChange={(e) => {
+                      setGuestVenueId(e.target.value);
+                      setNewGuest((prev) => ({ ...prev, turf: "", slotId: "" }));
+                    }}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 bg-transparent"
+                    required
+                  >
+                    {dbVenues.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
                   <Label className="text-slate-500 font-bold">Select Playing Turf</Label>
                   <select
                     value={newGuest.turf}
                     onChange={(e) => setNewGuest({ ...newGuest, turf: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl p-2.5 bg-transparent"
+                    required
                   >
-                    <option value="Football Pitch A">Football Pitch A</option>
-                    <option value="Football Pitch B">Football Pitch B</option>
-                    <option value="Cricket Ground A">Cricket Ground A</option>
-                    <option value="Badminton Court 1">Badminton Court 1</option>
+                    {ownerTurfs.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-slate-500 font-bold">Select Slot Time</Label>
+                  <select
+                    value={newGuest.slotId}
+                    onChange={(e) => setNewGuest({ ...newGuest, slotId: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 bg-transparent"
+                    required
+                  >
+                    {ownerTurfSlots.length > 0 ? (
+                      ownerTurfSlots.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.startTime} - {s.endTime} (₹{s.price})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>No available slots for today</option>
+                    )}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1154,10 +1356,12 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
                     onChange={(e) => setNewMnt({ ...newMnt, turf: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl p-2.5 bg-transparent"
                   >
-                    <option value="Football Pitch A">Football Pitch A</option>
-                    <option value="Football Pitch B">Football Pitch B</option>
-                    <option value="Cricket Ground A">Cricket Ground A</option>
-                    <option value="Badminton Court 1">Badminton Court 1</option>
+                    <option value="" disabled>Select Damaged Turf</option>
+                    {ownerAllTurfs.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1">

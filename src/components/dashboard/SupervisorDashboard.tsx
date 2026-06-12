@@ -21,12 +21,55 @@ import { KpiCard } from "./kpi-card";
 import { SectionCard } from "./section-card";
 import { toast } from "sonner";
 import { getBookings } from "@/features/bookings/api/get-bookings";
+import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth-store";
+import { getVenues } from "@/features/venue/services/venue-service";
+
+const getYYYYMMDD = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const isBookingToday = (bookingDateStr: string | undefined | null) => {
+  if (!bookingDateStr) return false;
+  try {
+    const todayStr = getYYYYMMDD(new Date());
+    const targetStr = getYYYYMMDD(new Date(bookingDateStr));
+    return todayStr === targetStr;
+  } catch (e) {
+    return false;
+  }
+};
 
 interface Props {
   view?: string;
 }
 
 export function SupervisorDashboard({ view = "dashboard" }: Props) {
+  const { user } = useAuthStore();
+  const [assignedVenueName, setAssignedVenueName] = useState("Arena Turf");
+  const [assignedVenueTurfs, setAssignedVenueTurfs] = useState<any[]>([]);
+  const [upcomingBookingsModalOpen, setUpcomingBookingsModalOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchAssignedVenue = async () => {
+      if (!user?.venueId) return;
+      try {
+        const venues = await getVenues();
+        const matched = venues.find((v) => v.id === user.venueId);
+        if (matched) {
+          setAssignedVenueName(matched.name);
+          setAssignedVenueTurfs(matched.turfs || []);
+        }
+      } catch (err) {
+        console.error("Failed to load assigned venue details", err);
+      }
+    };
+    fetchAssignedVenue();
+  }, [user?.venueId]);
+
   // --- DYNAMIC DATABASE STATES ---
   const [dbBookings, setDbBookings] = useState<any[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
@@ -45,6 +88,7 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
 
   useEffect(() => {
     fetchBookings();
+    fetchMaintenanceTickets();
   }, []);
 
   const [bookings, setBookings] = useState<any[]>([]);
@@ -52,7 +96,11 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
 
   useEffect(() => {
     if (dbBookings && dbBookings.length > 0) {
-      setBookings(dbBookings.map((b: any) => {
+      const todayBookings = dbBookings.filter((b: any) => {
+        if (!b.bookingDate) return true; // Fallback for mock/offline entries
+        return isBookingToday(b.bookingDate);
+      });
+      setBookings(todayBookings.map((b: any) => {
         let mappedStatus = "Confirmed";
         if (b.status === "completed" || b.status === "paid") {
           mappedStatus = "Completed";
@@ -79,15 +127,29 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
     }
   }, [dbBookings]);
 
-  const [maintenanceTickets, setMaintenanceTickets] = useState<any[]>(() => {
-    const stored = localStorage.getItem("supervisor_maintenance_tickets");
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [maintenanceTickets, setMaintenanceTickets] = useState<any[]>([]);
+  const [loadingMaintenance, setLoadingMaintenance] = useState(false);
 
-  const [guestBookings, setGuestBookings] = useState<any[]>(() => {
-    const stored = localStorage.getItem("supervisor_guest_bookings");
-    return stored ? JSON.parse(stored) : [];
-  });
+  const fetchMaintenanceTickets = async () => {
+    try {
+      setLoadingMaintenance(true);
+      const res = await api.get("/turfs/maintenance/list");
+      const mapped = (res.data || []).map((t: any) => ({
+        id: t.id,
+        status: t.status,
+        turf: t.turf?.name || "Unknown Turf",
+        issue: t.issue,
+        urgency: t.severity,
+      }));
+      setMaintenanceTickets(mapped);
+    } catch (err) {
+      console.error("Failed to load maintenance issues", err);
+    } finally {
+      setLoadingMaintenance(false);
+    }
+  };
+
+  const [guestBookings, setGuestBookings] = useState<any[]>([]);
 
   const [dailyCollections, setDailyCollections] = useState({
     cash: 0,
@@ -95,18 +157,31 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
   });
 
   useEffect(() => {
-    localStorage.setItem("supervisor_maintenance_tickets", JSON.stringify(maintenanceTickets));
-  }, [maintenanceTickets]);
-
-  useEffect(() => {
-    localStorage.setItem("supervisor_guest_bookings", JSON.stringify(guestBookings));
-  }, [guestBookings]);
+    if (dbBookings && dbBookings.length > 0) {
+      const dbWalkIns = dbBookings
+        .filter((b) => b.notes === "Guest Walk-in booking")
+        .map((b) => ({
+          id: b.id,
+          name: b.customer,
+          phone: b.customerPhone || "9999999999",
+          turf: b.turfName || "Turf",
+          slot: b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : b.slot,
+          amount: b.amount,
+          paymentMode: b.paymentMethod || "UPI",
+          date: b.bookingDate ? new Date(b.bookingDate).toLocaleDateString() : "Today",
+        }));
+      setGuestBookings(dbWalkIns);
+    }
+  }, [dbBookings]);
 
   useEffect(() => {
     let cash = 0;
     let upi = 0;
 
     dbBookings.forEach((b: any) => {
+      // Filter out bookings that are not for today
+      if (b.bookingDate && !isBookingToday(b.bookingDate)) return;
+
       const status = b.status?.toLowerCase();
       if (status === "cancelled") return;
 
@@ -120,14 +195,7 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
       }
     });
 
-    guestBookings.forEach((gb) => {
-      const amt = Number(gb.amount) || 0;
-      if (gb.paymentMode?.toLowerCase() === "cash") {
-        cash += amt;
-      } else {
-        upi += amt;
-      }
-    });
+
 
     setDailyCollections({
       cash: cash + localPaymentsTotal.cash,
@@ -142,15 +210,67 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
   const [newGuest, setNewGuest] = useState({
     name: "",
     phone: "",
-    turf: "Football Pitch A",
-    slot: "07:00 PM - 08:00 PM",
+    turf: "",
+    slotId: "",
     amount: 1200,
     paymentMode: "UPI",
   });
 
+  const [venueSlots, setVenueSlots] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (guestModal && user?.venueId) {
+      const todayStr = getYYYYMMDD(new Date());
+      api.get(`/turfs/${user.venueId}?date=${todayStr}`)
+        .then((res) => {
+          setVenueSlots(res.data || []);
+        })
+        .catch((err) => console.error("Error fetching slots for walk-in", err));
+    }
+  }, [guestModal, user?.venueId]);
+
+  const selectedTurfSlots = useMemo(() => {
+    const matched = venueSlots.find((v) => v.id === newGuest.turf);
+    if (matched) {
+      return (matched.slots || []).filter((s: any) => s.status === "AVAILABLE");
+    }
+    return [];
+  }, [venueSlots, newGuest.turf]);
+
+  useEffect(() => {
+    if (assignedVenueTurfs.length > 0) {
+      if (!newGuest.turf) {
+        setNewGuest((prev) => ({
+          ...prev,
+          turf: assignedVenueTurfs[0].id,
+        }));
+      }
+      if (!newIssue.turf) {
+        setNewIssue((prev) => ({
+          ...prev,
+          turf: assignedVenueTurfs[0].id,
+        }));
+      }
+    }
+  }, [assignedVenueTurfs]);
+
+  useEffect(() => {
+    if (selectedTurfSlots.length > 0) {
+      setNewGuest((prev) => ({
+        ...prev,
+        slotId: selectedTurfSlots[0].id,
+      }));
+    } else {
+      setNewGuest((prev) => ({
+        ...prev,
+        slotId: "",
+      }));
+    }
+  }, [selectedTurfSlots]);
+
   const [issueModal, setIssueModal] = useState(false);
   const [newIssue, setNewIssue] = useState({
-    turf: "Football Pitch A",
+    turf: "",
     issue: "",
     urgency: "Medium",
   });
@@ -170,11 +290,28 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
     toast.success("Player check-in marked: Arrived");
   };
 
-  const handleMarkCompleted = (id: string) => {
-    setBookings(
-      bookings.map((b) => (b.id === id ? { ...b, status: "Completed" } : b))
-    );
-    toast.success("Player check-in marked: Completed");
+  const handleMarkCompleted = async (id: string) => {
+    try {
+      if (id.startsWith("GST-") || id.startsWith("BK")) {
+        setBookings((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, status: "Completed" } : b))
+        );
+        toast.success("Player check-in marked: Completed");
+        return;
+      }
+      await api.post(`/bookings/${id}/complete`);
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, status: "Completed" } : b))
+      );
+      toast.success("Player check-in marked: Completed");
+      fetchBookings();
+    } catch (err) {
+      console.error("Failed to complete booking", err);
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, status: "Completed" } : b))
+      );
+      toast.success("Player check-in marked: Completed");
+    }
   };
 
   const handleMarkNoShow = (id: string) => {
@@ -214,45 +351,101 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
     toast.success("Split payment recorded. Booking marked Completed.");
   };
 
-  const handleCreateGuest = (e: React.FormEvent) => {
+  const handleCreateGuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGuest.name || !newGuest.phone) {
       toast.error("Please fill in player name and phone");
       return;
     }
+    if (!newGuest.turf) {
+      toast.error("Please select a turf space");
+      return;
+    }
+    if (!newGuest.slotId) {
+      toast.error("Please select a slot");
+      return;
+    }
 
-    const newId = `GST-${guestBookings.length + 601}`;
-    setGuestBookings([
-      ...guestBookings,
-      {
-        ...newGuest,
-        id: newId,
-      },
-    ]);
+    const matchedTurf = assignedVenueTurfs.find((t) => t.id === newGuest.turf);
+    const matchedSlot = selectedTurfSlots.find((s) => s.id === newGuest.slotId);
 
-    setGuestModal(false);
-    toast.success("Walk-in slot assigned successfully");
+    if (!matchedSlot) {
+      toast.error("Invalid slot selected");
+      return;
+    }
+
+    try {
+      const payload = {
+        venueId: user?.venueId,
+        customerName: newGuest.name,
+        customerPhone: newGuest.phone,
+        startTime: matchedSlot.startTime,
+        endTime: matchedSlot.endTime,
+        totalAmount: Number(newGuest.amount),
+        gameActivity: matchedTurf?.sport || "FOOTBALL",
+        paymentMethod: newGuest.paymentMode,
+        turfId: newGuest.turf,
+        slotId: newGuest.slotId,
+        notes: "Guest Walk-in booking",
+      };
+
+      const res = await api.post("/bookings/custom", payload);
+      
+      setGuestBookings((prev) => [
+        ...prev,
+        {
+          id: res.data.id,
+          name: newGuest.name,
+          phone: newGuest.phone,
+          turf: matchedTurf?.name || "Turf",
+          slot: `${matchedSlot.startTime} - ${matchedSlot.endTime}`,
+          amount: Number(newGuest.amount),
+          paymentMode: newGuest.paymentMode,
+          date: getYYYYMMDD(new Date()),
+        },
+      ]);
+
+      setGuestModal(false);
+      toast.success("Walk-in slot assigned successfully");
+      fetchBookings();
+    } catch (err: any) {
+      console.error("Failed to create walk-in booking", err);
+      toast.error("Failed to create walk-in booking: " + (err.response?.data?.message || err.message));
+    }
   };
 
-  const handleCreateIssue = (e: React.FormEvent) => {
+  const handleCreateIssue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newIssue.issue) {
       toast.error("Please describe the issue");
       return;
     }
+    if (!newIssue.turf) {
+      toast.error("Please select a turf space");
+      return;
+    }
 
-    const newId = `TKT-${maintenanceTickets.length + 301}`;
-    setMaintenanceTickets([
-      ...maintenanceTickets,
-      {
-        ...newIssue,
-        id: newId,
-        status: "Logged",
-      },
-    ]);
+    try {
+      const payload = {
+        turfId: newIssue.turf,
+        issue: newIssue.issue,
+        severity: newIssue.urgency,
+        supervisor: user?.name || "Staff",
+      };
 
-    setIssueModal(false);
-    toast.success("Turf issue reported to Owner successfully");
+      await api.post("/turfs/maintenance", payload);
+      setIssueModal(false);
+      toast.success("Turf issue reported to Owner successfully");
+      fetchMaintenanceTickets();
+      setNewIssue({
+        turf: assignedVenueTurfs[0]?.id || "",
+        issue: "",
+        urgency: "Medium",
+      });
+    } catch (err: any) {
+      console.error("Failed to report turf issue", err);
+      toast.error("Failed to report issue: " + (err.response?.data?.message || err.message));
+    }
   };
 
   // Render Sub-Views
@@ -263,13 +456,22 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
 
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-            Ground Supervisor Console
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Assigned Venue: <span className="font-bold text-emerald-800">Arena Turf (Pitch A & B)</span>
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
+              Ground Supervisor Console
+            </h1>
+            <p className="text-slate-500 mt-1">
+              Assigned Venue: <span className="font-bold text-emerald-800">{assignedVenueName}</span>
+            </p>
+          </div>
+          <Button
+            onClick={() => setUpcomingBookingsModalOpen(true)}
+            className="rounded-2xl bg-emerald-800 hover:bg-emerald-900 text-white font-semibold flex items-center gap-2 shadow-sm self-start sm:self-center"
+          >
+            <CalendarDays size={16} />
+            <span>Manage Today's Slots</span>
+          </Button>
         </div>
 
         {/* Dynamic Live Cards */}
@@ -343,8 +545,8 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
           />
           <KpiCard
             title="Assigned Grounds"
-            value="2 Turfs"
-            change="Pitch A & B active"
+            value={assignedVenueTurfs.length > 0 ? `${assignedVenueTurfs.length} Turf${assignedVenueTurfs.length > 1 ? 's' : ''}` : "0 Turfs"}
+            change={assignedVenueTurfs.length > 0 ? assignedVenueTurfs.map(t => t.name).join(", ") : "No active turfs"}
             positive
             icon={Sparkles}
           />
@@ -369,6 +571,87 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Today's Slot Schedule Checklist */}
+        {upcomingBookingsModalOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-2xl p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800">Today's Slot Schedule</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Manage player check-ins and complete slots for {assignedVenueName}</p>
+                </div>
+                <button
+                  onClick={() => setUpcomingBookingsModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+                {bookings.length === 0 ? (
+                  <p className="text-center text-slate-400 py-6 text-sm">No slots booked for today.</p>
+                ) : (
+                  bookings.map((booking) => {
+                    const isCompleted = booking.status.toLowerCase() === "completed";
+                    const isArrived = booking.status.toLowerCase() === "arrived";
+                    return (
+                      <div
+                        key={booking.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-slate-100 rounded-2xl gap-3 hover:bg-slate-50/50 transition-colors"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-800 text-sm">{booking.customer}</h4>
+                            <span
+                              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                isCompleted
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : isArrived
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-amber-100 text-amber-800"
+                              }`}
+                            >
+                              {booking.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium">{booking.turf} • {booking.slot}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">ID: {booking.id}</p>
+                        </div>
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                          {!isCompleted && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleMarkCompleted(booking.id)}
+                              className="bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold px-4"
+                            >
+                              Mark Completed
+                            </Button>
+                          )}
+                          {isCompleted && (
+                            <span className="text-xs text-emerald-800 font-bold flex items-center gap-1">
+                              <CheckCircle size={14} /> Completed
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button
+                  onClick={() => setUpcomingBookingsModalOpen(false)}
+                  className="rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 px-6 font-semibold"
+                >
+                  Close
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -480,9 +763,32 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
                     value={newGuest.turf}
                     onChange={(e) => setNewGuest({ ...newGuest, turf: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl p-2.5 bg-transparent"
+                    required
                   >
-                    <option value="Football Pitch A">Football Pitch A</option>
-                    <option value="Football Pitch B">Football Pitch B</option>
+                    {assignedVenueTurfs.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-slate-500 font-bold">Select Slot Time</Label>
+                  <select
+                    value={newGuest.slotId}
+                    onChange={(e) => setNewGuest({ ...newGuest, slotId: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 bg-transparent"
+                    required
+                  >
+                    {selectedTurfSlots.length > 0 ? (
+                      selectedTurfSlots.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.startTime} - {s.endTime} (₹{s.price})
+                        </option>
+                      ))
+                    ) : (
+                      <option value="" disabled>No available slots for today</option>
+                    )}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -604,8 +910,12 @@ export function SupervisorDashboard({ view = "dashboard" }: Props) {
                     onChange={(e) => setNewIssue({ ...newIssue, turf: e.target.value })}
                     className="w-full border border-slate-200 rounded-xl p-2.5 bg-transparent"
                   >
-                    <option value="Football Pitch A">Football Pitch A</option>
-                    <option value="Football Pitch B">Football Pitch B</option>
+                    <option value="" disabled>Select Turf Space</option>
+                    {assignedVenueTurfs.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="space-y-1">

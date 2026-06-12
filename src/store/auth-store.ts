@@ -12,6 +12,7 @@ interface User {
     name: string;
     email: string;
     role: UserRole;
+    venueId?: string;
 }
 
 interface AuthStore {
