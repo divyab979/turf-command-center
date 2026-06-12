@@ -55,18 +55,42 @@ export function SuperAdminDashboard({ view = "dashboard" }: Props) {
   const fetchStats = async () => {
     try {
       setLoadingStats(true);
-      const [bookingsData, venuesData, rawBookingsRes, ownersRes] = await Promise.all([
-        getBookings(),
-        api.get("/venues"),
-        api.get("/bookings/admin"),
-        api.get("/users/owners"),
-      ]);
-      setDbBookings(bookingsData);
-      setDbVenues(venuesData.data);
-      setRawBookings(rawBookingsRes.data);
-      setDbOwners(ownersRes.data);
+      const [bookingsResult, venuesResult, rawBookingsResult, ownersResult] =
+        await Promise.allSettled([
+          getBookings(),
+          api.get("/venues"),
+          api.get("/bookings/admin"),
+          api.get("/users/owners"),
+        ]);
+
+      if (bookingsResult.status === "fulfilled") {
+        setDbBookings(bookingsResult.value);
+      } else {
+        console.warn("Could not load bookings:", bookingsResult.reason?.response?.status);
+      }
+
+      if (venuesResult.status === "fulfilled") {
+        setDbVenues(venuesResult.value.data);
+      } else {
+        console.warn("Could not load venues:", venuesResult.reason?.response?.status);
+      }
+
+      if (rawBookingsResult.status === "fulfilled") {
+        setRawBookings(rawBookingsResult.value.data);
+      } else {
+        console.warn("Could not load raw bookings:", rawBookingsResult.reason?.response?.status);
+      }
+
+      if (ownersResult.status === "fulfilled") {
+        setDbOwners(ownersResult.value.data);
+      } else {
+        console.warn(
+          "Could not load owners list (insufficient permissions):",
+          ownersResult.reason?.response?.status
+        );
+      }
     } catch (err) {
-      console.error("Failed to load platform stats", err);
+      console.error("Unexpected error loading platform stats", err);
     } finally {
       setLoadingStats(false);
     }

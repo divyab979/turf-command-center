@@ -44,6 +44,14 @@ interface Props {
 
 export function OwnerDashboard({ view = "dashboard" }: Props) {
   // --- MOCK STATES REMOVED ---
+  // Venue & Staff dynamic databases — declared first to avoid TDZ error
+  const [dbVenues, setDbVenues] = useState<any[]>([]);
+  const [dbStaff, setDbStaff] = useState<any[]>([]);
+  const [dbBookings, setDbBookings] = useState<any[]>([]);
+  const [loadingVenues, setLoadingVenues] = useState(false);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+
   const [tournaments, setTournaments] = useState<any[]>(() => {
     const stored = localStorage.getItem("owner_tournaments");
     return stored ? JSON.parse(stored) : [];
@@ -98,14 +106,6 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
   useEffect(() => {
     localStorage.setItem("owner_tournaments", JSON.stringify(tournaments));
   }, [tournaments]);
-
-  // Venue & Staff dynamic databases
-  const [dbVenues, setDbVenues] = useState<any[]>([]);
-  const [dbStaff, setDbStaff] = useState<any[]>([]);
-  const [dbBookings, setDbBookings] = useState<any[]>([]);
-  const [loadingVenues, setLoadingVenues] = useState(false);
-  const [loadingStaff, setLoadingStaff] = useState(false);
-  const [loadingBookings, setLoadingBookings] = useState(false);
 
   const fetchVenues = async () => {
     try {
@@ -601,7 +601,7 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
 
     const matchedVenue = dbVenues.find((v) => v.id === guestVenueId);
     const matchedTurf = ownerVenueSlots.find((t) => t.id === newGuest.turf);
-    const matchedSlot = ownerTurfSlots.find((s) => s.id === newGuest.slotId);
+    const matchedSlot = ownerTurfSlots.find((s: any) => s.id === newGuest.slotId);
 
     if (!matchedSlot) {
       toast.error("Invalid slot selected");
@@ -1206,7 +1206,7 @@ export function OwnerDashboard({ view = "dashboard" }: Props) {
                     required
                   >
                     {ownerTurfSlots.length > 0 ? (
-                      ownerTurfSlots.map((s) => (
+                      ownerTurfSlots.map((s: any) => (
                         <option key={s.id} value={s.id}>
                           {s.startTime} - {s.endTime} (₹{s.price})
                         </option>
